@@ -12,13 +12,14 @@
 
 #define DEFAULT_PORT "4420"
 
-int get_socket()
+int get_socket() // DON'T forget to close this
 {
 	struct addrinfo hints, *results, *cur;
 	int socketfd;
 
 	// Initialize hints
 	memset(&hints, 0, sizeof(hints));
+
 	// Set options for a UDP server
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
@@ -51,7 +52,7 @@ int get_socket()
 		return_value = setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR,
 					  &val, sizeof(val));
 		if (return_value == -1) {
-			perror("setsockopt");
+			perror("Setsockopt fail");
 			close(socketfd);
 			continue;
 		}
@@ -63,10 +64,20 @@ int get_socket()
 			perror("Bind fail");
 			continue;
 		}
+
 		printf("family: %x\n", cur->ai_family);
 		printf("socktype: %x\n", cur->ai_socktype);
+
 		break;
 	}
+
+	// Couldn't bind so just end here
+	if (cur == NULL) {
+		perror("Bind fail");
+		return 2;
+	}
+
+	freeaddrinfo(results);
 
 	return socketfd;
 }

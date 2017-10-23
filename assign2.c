@@ -3,10 +3,12 @@
  * Assign: 2
  */
 
+#include <stdio.h>
+
 #include "server.h"
 
 int main(int argc, char const *argv[])
 {
-	get_socket();
+	printf("%d\n", get_socket());
 	return 0;
 }
