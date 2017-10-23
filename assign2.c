@@ -3,7 +3,10 @@
  * Assign: 2
  */
 
-int main(int argc, char const *argv[]) {
-        /* code */
-        return 0;
+#include "server.h"
+
+int main(int argc, char const *argv[])
+{
+	get_socket();
+	return 0;
 }
