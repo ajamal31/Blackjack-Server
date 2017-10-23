@@ -20,6 +20,8 @@ int get_socket()
 	// Set options for a UDP server
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
+        hints.ai_protocol = IPPROTO_UDP;
+        hints.ai_flags = AI_PASSIVE;
 
 	// Get avaliable addresses
 	int return_value = getaddrinfo(NULL, DEFAULT_PORT, &hints, &results);
