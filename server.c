@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -15,9 +16,39 @@
 #define NUMBER_OF_PLAYERS 7
 #define USERNAME_LEN 12
 
-void open_connection(int socketfd)
+static char *seats[NUMBER_OF_PLAYERS];
+
+static void mem_check(void *mem)
+{
+	if (mem == NULL) {
+		fprintf(stderr, "%s\n", "malloc fail");
+		exit(EXIT_FAILURE);
+	}
+}
+
+static void init_seats(char *table[])
+{
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		table[i] = malloc(USERNAME_LEN + 1);
+		mem_check(table[i]);
+		memset(table[i], '\0', USERNAME_LEN);
+		printf("table: %s\n", table[i]);
+	}
+}
+
+static void handle_packet(char packet[])
 {
 
+	if (packet[0] == '1') {
+		printf("this is a connect request\n");
+	} else {
+		printf("this is not a connect request\n");
+	}
+}
+
+void open_connection(int socketfd)
+{
+	init_seats(seats);
 	// Declare main_readfds as fd_set
 	fd_set main_readfds;
 	// Initializes main_readfds
@@ -49,6 +80,7 @@ void open_connection(int socketfd)
 			memset(buf, '\0', 1500);
 
 			int bytes_read = read(socketfd, buf, 1500);
+			handle_packet(buf);
 			write(1, buf, bytes_read);
 
 			fflush(stdout);
