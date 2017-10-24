@@ -9,6 +9,12 @@
 
 int main(int argc, char const *argv[])
 {
-	printf("%d\n", get_socket());
+	int socketfd;
+	if ((socketfd = get_socket()) != 2) {
+		open_connection(socketfd);
+	} else {
+		fprintf(stderr, "%s\n", "Error opening a socket" );
+		return 1;
+	}
 	return 0;
 }

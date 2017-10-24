@@ -6,11 +6,53 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #define DEFAULT_PORT "4420"
+
+void open_connection(int socketfd)
+{
+
+	// Declare main_readfds as fd_set
+	fd_set main_readfds;
+	// Initializes main_readfds
+	FD_ZERO(&main_readfds);
+	// Adds socketfd to main_readfds pointer
+	FD_SET(socketfd, &main_readfds);
+
+	while (1) {
+		struct timeval timeout = {
+		    .tv_sec = 0,
+		    .tv_usec = 100e3, // 100 ms
+		};
+
+		// Copy the main_readfds because they will change as select is
+		// checking whether the file descriptors are ready or not.
+		fd_set readfds = main_readfds;
+
+		// The number of bytes that are ready to be read.
+		int bytes_ready =
+		    select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
+
+		if (bytes_ready == -1) {
+			fprintf(stderr, "%s\n", "select call failed");
+			continue;
+		}
+
+		// printf("bytes_ready: %d\n", bytes_ready);
+
+		if (FD_ISSET(STDIN_FILENO, &readfds)) {
+			char buf[1500];
+
+			int bytes_read = read(STDIN_FILENO, buf, 1500);
+
+			printf("bytes read: %d\n", bytes_read );
+		}
+	}
+}
 
 int get_socket() // DON'T forget to close this
 {

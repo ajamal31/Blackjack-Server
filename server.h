@@ -4,3 +4,5 @@
 
 
 int get_socket();
+
+void open_connection(int socketfd);
