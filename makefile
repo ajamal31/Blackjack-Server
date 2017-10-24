@@ -1,16 +1,20 @@
+# Name: Arun Jamal
+# Course: CMPT 361 (Fall 2017)
+# Description: Builds the program
+
 CC=gcc
 CFLAGS=-Wall -std=c99 -pedantic -D_POSIX_C_SOURCE=200809L
 
-all: assign2.o server.o
-	$(CC) assign2.o server.o -o assign2 $(CFLAGS)
+.PHONY: clean
 
-assign2: assign2.c server.h
-	$(CC) assign2.c -c $(CFLAGS)
+blackjack: blackjack.o server.o
+	$(CC) $(CFLAGS) blackjack.o server.o -o blackjack
+
+blackjack.o: blackjack.c server.h
 
 server: server.c server.h
-	$(CC) server.c -c $(CFLAGS)
 
 .PHONY: clean
 
 clean:
-	$(RM) assign2 assign2.o server.o
+	$(RM) blackjack blackjack.o server.o
