@@ -12,6 +12,8 @@
 #include <unistd.h>
 
 #define DEFAULT_PORT "4420"
+#define NUMBER_OF_PLAYERS 7
+#define USERNAME_LEN 12
 
 void open_connection(int socketfd)
 {
@@ -35,23 +37,31 @@ void open_connection(int socketfd)
 
 		// The number of bytes that are ready to be read.
 		int bytes_ready =
-		    select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
+		    select(socketfd + 1, &readfds, NULL, NULL, &timeout);
 
 		if (bytes_ready == -1) {
 			fprintf(stderr, "%s\n", "select call failed");
 			continue;
 		}
 
-		// printf("bytes_ready: %d\n", bytes_ready);
-
-		if (FD_ISSET(STDIN_FILENO, &readfds)) {
+		if (FD_ISSET(socketfd, &readfds)) {
 			char buf[1500];
+			memset(buf, '\0', 1500);
 
-			int bytes_read = read(STDIN_FILENO, buf, 1500);
+			int bytes_read = read(socketfd, buf, 1500);
+			write(1, buf, bytes_read);
 
-			printf("bytes read: %d\n", bytes_read );
+			fflush(stdout);
+
+			printf("bytes read: %d\n\n", bytes_read);
+		} // End of if statement
+
+		if (bytes_ready == 0) {
+			// might need this later so you left it but remove if
+			// it's not needed.
 		}
-	}
+
+	} // End of while loop
 }
 
 int get_socket() // DON'T forget to close this
@@ -106,9 +116,6 @@ int get_socket() // DON'T forget to close this
 			perror("Bind fail");
 			continue;
 		}
-
-		printf("family: %x\n", cur->ai_family);
-		printf("socktype: %x\n", cur->ai_socktype);
 
 		break;
 	}
