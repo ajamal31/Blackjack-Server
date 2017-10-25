@@ -14,9 +14,40 @@
 
 #define DEFAULT_PORT "4420"
 #define NUMBER_OF_PLAYERS 7
-#define USERNAME_LEN 12
+#define USERNAME_LEN 13
 
 static char *seats[NUMBER_OF_PLAYERS];
+
+static void print_table(char *table[])
+{
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		printf("Seat %d: %s\n", i, table[i]);
+	}
+}
+
+static void add_player(char *table[], char packet[])
+{
+	int seat_count = 0;
+	printf("packet: %s\n", packet);
+	// Find an empty seat and add the player to it.
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		seat_count++;
+
+		if (strncmp(table[i], packet, USERNAME_LEN) == 0) {
+			printf("%s\n", "Username is currently being "
+				       "used in the game");
+			break;
+		}
+
+		if (strncmp(table[i], "", USERNAME_LEN) == 0) {
+			strncpy(table[i], packet, USERNAME_LEN);
+			break;
+		}
+	}
+	if (seat_count >= NUMBER_OF_PLAYERS) {
+		printf("%s\n", "Table is full. Sorry, no room for you.");
+	}
+}
 
 static void clear_seats(char *table[])
 {
@@ -41,13 +72,13 @@ static void init_seats(char *table[])
 		table[i] = malloc(USERNAME_LEN + 1);
 		mem_check(table[i]);
 		memset(table[i], '\0', USERNAME_LEN);
-		printf("table: %s\n", table[i]);
 	}
 }
 
 static void handle_packet(char packet[])
 {
 	if (packet[0] == '1') {
+		add_player(seats, packet);
 		printf("this is a connect request\n");
 	} else {
 		printf("this is not a connect request\n");
@@ -89,12 +120,19 @@ void open_connection(int socketfd)
 			memset(buf, '\0', 1500);
 
 			int bytes_read = read(socketfd, buf, 1500);
+
+			if (bytes_read == -1) {
+				fprintf(stderr, "%s\n",
+					"server: error reading from socket");
+				continue;
+			}
+
+			// Removes the new line character
+			buf[strlen(buf) - 1] = '\0';
 			handle_packet(buf);
-			write(1, buf, bytes_read);
 
-			fflush(stdout);
-
-			printf("bytes read: %d\n\n", bytes_read);
+			printf("%s\n", "Current table");
+			print_table(seats);
 		} // End of if statement
 
 		if (bytes_ready == 0) {
