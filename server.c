@@ -18,6 +18,15 @@
 
 static char *seats[NUMBER_OF_PLAYERS];
 
+static void clear_seats(char *table[])
+{
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		if (table[i] != NULL) {
+			free(table[i]);
+		}
+	}
+}
+
 static void mem_check(void *mem)
 {
 	if (mem == NULL) {
@@ -38,7 +47,6 @@ static void init_seats(char *table[])
 
 static void handle_packet(char packet[])
 {
-
 	if (packet[0] == '1') {
 		printf("this is a connect request\n");
 	} else {
@@ -48,7 +56,7 @@ static void handle_packet(char packet[])
 
 void open_connection(int socketfd)
 {
-	init_seats(seats);
+	init_seats(seats); // This isn't being freed right now.
 	// Declare main_readfds as fd_set
 	fd_set main_readfds;
 	// Initializes main_readfds
@@ -56,6 +64,7 @@ void open_connection(int socketfd)
 	// Adds socketfd to main_readfds pointer
 	FD_SET(socketfd, &main_readfds);
 
+	// This needs to terminate when control-c is pressed
 	while (1) {
 		struct timeval timeout = {
 		    .tv_sec = 0,
@@ -94,6 +103,11 @@ void open_connection(int socketfd)
 		}
 
 	} // End of while loop
+
+	clear_seats(seats); // this isn't doing anything right now, you'll need
+			    // to add a signal handler and after control-c is
+			    // pressed, kill the while loop so this funciton can
+			    // run.
 }
 
 int get_socket() // DON'T forget to close this
