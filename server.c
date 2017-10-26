@@ -19,6 +19,8 @@
 #define USERNAME_LEN 13
 
 static char *seats[NUMBER_OF_PLAYERS];
+static struct sockaddr_storage recv_addr;
+socklen_t addr_len;
 
 static int is_username_valid(char username[])
 {
@@ -58,7 +60,8 @@ static void add_player(char *table[], char packet[])
 			strncpy(table[i], packet, USERNAME_LEN);
 			break;
 		}
-	}
+	} // End of for loop
+
 	if (seat_count >= NUMBER_OF_PLAYERS) {
 		printf("%s\n", "Table is full. Sorry, no room for you.");
 	}
@@ -139,7 +142,9 @@ void open_connection(int socketfd)
 			char buf[1500];
 			memset(buf, '\0', 1500);
 
-			int bytes_read = read(socketfd, buf, 1500);
+			int bytes_read =
+			    recvfrom(socketfd, buf, 1500, 0,
+				     (struct sockaddr *)&recv_addr, &addr_len);
 
 			if (bytes_read == -1) {
 				fprintf(stderr, "%s\n",
@@ -149,11 +154,13 @@ void open_connection(int socketfd)
 
 			// Removes the new line character
 			buf[strlen(buf) - 1] = '\0';
+
 			handle_packet(buf);
 
 			printf("%s\n", "Current table");
 			print_table(seats);
 			printf("\n");
+
 		} // End of if statement
 
 		if (bytes_ready == 0) {
