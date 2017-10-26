@@ -3,10 +3,12 @@
  */
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -17,6 +19,18 @@
 #define USERNAME_LEN 13
 
 static char *seats[NUMBER_OF_PLAYERS];
+
+static int is_username_valid(char username[])
+{
+	for (int i = 0; i < strlen(username); i++) {
+		if (!isalnum(username[i])) {
+			return 1;
+		} else if (strlen(username) > USERNAME_LEN) {
+			return 2;
+		}
+	}
+	return 0;
+}
 
 static void print_table(char *table[])
 {
@@ -33,13 +47,14 @@ static void add_player(char *table[], char packet[])
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
 
-		if (strncmp(table[i], packet, USERNAME_LEN) == 0) {
-			printf("%s\n", "Username is currently being "
-				       "used in the game");
+		if (strncasecmp(table[i], packet, USERNAME_LEN) == 0) {
+			printf("%s\n",
+			       "Username is currently being "
+			       "used in the game, try a different user name");
 			break;
 		}
 
-		if (strncmp(table[i], "", USERNAME_LEN) == 0) {
+		if (strncasecmp(table[i], "", USERNAME_LEN) == 0) {
 			strncpy(table[i], packet, USERNAME_LEN);
 			break;
 		}
@@ -78,8 +93,13 @@ static void init_seats(char *table[])
 static void handle_packet(char packet[])
 {
 	if (packet[0] == '1') {
-		add_player(seats, packet);
-		printf("this is a connect request\n");
+		if (is_username_valid(packet) == 0) {
+			add_player(seats, packet);
+		} else {
+			printf("%s\n", "Invalid username; can only contain "
+				       "letters or digits and can't be longer "
+				       "than 12 characters");
+		}
 	} else {
 		printf("this is not a connect request\n");
 	}
@@ -133,6 +153,7 @@ void open_connection(int socketfd)
 
 			printf("%s\n", "Current table");
 			print_table(seats);
+			printf("\n");
 		} // End of if statement
 
 		if (bytes_ready == 0) {
