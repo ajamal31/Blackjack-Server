@@ -4,6 +4,7 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,14 +18,65 @@
 #define DEFAULT_PORT "4420"
 #define NUMBER_OF_PLAYERS 7
 #define USERNAME_LEN 13
+#define STATE_SIZE 320
 
 static char *seats[NUMBER_OF_PLAYERS];
+static char state[STATE_SIZE];
 static struct sockaddr_storage recv_addr;
-socklen_t addr_len;
+static socklen_t addr_len;
+
+static void print_state(char state[])
+{
+	for (int i = 0; i < STATE_SIZE; i++) {
+		printf("%c", state[i]);
+	}
+}
+
+static void init_state(char state[]) { memset(state, '\0', STATE_SIZE); }
+
+static void add_player_state(char state[], char player[])
+{
+	int length = strlen(player);
+	int count = 74;
+
+	for (;count < 320; count+= 41) {
+		if (state[count] == '\0') {
+			printf("index %d in state is null\n", count);
+			break;
+		}
+	}
+
+	printf("Player: ");
+	for (int i = 0; i < length; i++) {
+		state[count] = player[i];
+		printf("%c", player[i]);
+		count++;
+	}
+	printf("\n");
+
+	while (length < USERNAME_LEN) {
+		state[count++] = 'p';
+		length++;
+	}
+
+	print_state(state);
+
+	printf("\n");
+}
+
+// static void update_state(char state[])
+// {
+// 	for (int i = 7; i < STATE_SIZE; i++) {
+// 		state[i] = 'a';
+// 	}
+// 	printf("%s\n", "state in update_state: ");
+// 	print_state(state);
+// }
 
 static int is_username_valid(char username[])
 {
-	for (int i = 0; i < strlen(username); i++) {
+	// Start at index 1 because index 0 is the op code
+	for (int i = 1; i < strlen(username); i++) {
 		if (!isalnum(username[i])) {
 			return 1;
 		} else if (strlen(username) > USERNAME_LEN) {
@@ -95,9 +147,11 @@ static void init_seats(char *table[])
 
 static void handle_packet(char packet[])
 {
-	if (packet[0] == '1') {
+	if (packet[0] == 1) {
+		printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
 			add_player(seats, packet);
+			add_player_state(state, packet);
 		} else {
 			printf("%s\n", "Invalid username; can only contain "
 				       "letters or digits and can't be longer "
@@ -117,6 +171,9 @@ void open_connection(int socketfd)
 	FD_ZERO(&main_readfds);
 	// Adds socketfd to main_readfds pointer
 	FD_SET(socketfd, &main_readfds);
+
+	init_state(state);
+	printf("state before: %s\n", state);
 
 	// This needs to terminate when control-c is pressed
 	while (1) {
@@ -141,10 +198,13 @@ void open_connection(int socketfd)
 		if (FD_ISSET(socketfd, &readfds)) {
 			char buf[1500];
 			memset(buf, '\0', 1500);
+			addr_len = sizeof(recv_addr);
 
 			int bytes_read =
 			    recvfrom(socketfd, buf, 1500, 0,
 				     (struct sockaddr *)&recv_addr, &addr_len);
+
+			printf("bytes_read[0] == 1: %d\n", buf[0] == 1);
 
 			if (bytes_read == -1) {
 				fprintf(stderr, "%s\n",
@@ -152,12 +212,20 @@ void open_connection(int socketfd)
 				continue;
 			}
 
-			// Removes the new line character
-			buf[strlen(buf) - 1] = '\0';
+			// int bytes_send =
+			//     sendto(socketfd, buf, strlen(buf), 0,
+			// 	   (struct sockaddr *)&recv_addr, addr_len);
+			//
+			// printf("bytes_sent: %d\n", bytes_send);
+			//
+			// if (bytes_send == -1) {
+			// 	fprintf(stderr, "%s\n", "bytes_send error");
+			// 	continue;
+			// }
 
 			handle_packet(buf);
 
-			printf("%s\n", "Current table");
+			printf("%s\n", "Current table:");
 			print_table(seats);
 			printf("\n");
 
