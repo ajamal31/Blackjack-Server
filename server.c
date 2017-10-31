@@ -15,54 +15,58 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "server.h"
+
 #define DEFAULT_PORT "4420"
+#define TEST_PORT                                                              \
+	"5629" // needs to be removed, especially after the command line
+	       // arguement
 #define NUMBER_OF_PLAYERS 7
 #define USERNAME_LEN 13
 #define STATE_SIZE 320
+#define MAX_CARDS 21
 
 static char *seats[NUMBER_OF_PLAYERS];
-static char state[STATE_SIZE];
-static struct sockaddr_storage recv_addr;
-static socklen_t addr_len;
+// static char state[STATE_SIZE];
 
-static void print_state(char state[])
-{
-	for (int i = 0; i < STATE_SIZE; i++) {
-		printf("%c", state[i]);
-	}
-}
+// static void print_state(char state[])
+// {
+// 	for (int i = 0; i < STATE_SIZE; i++) {
+// 		printf("%c", state[i]);
+// 	}
+// }
 
-static void init_state(char state[]) { memset(state, '\0', STATE_SIZE); }
-
-static void add_player_state(char state[], char player[])
-{
-	int length = strlen(player);
-	int count = 74;
-
-	for (;count < 320; count+= 41) {
-		if (state[count] == '\0') {
-			printf("index %d in state is null\n", count);
-			break;
-		}
-	}
-
-	printf("Player: ");
-	for (int i = 0; i < length; i++) {
-		state[count] = player[i];
-		printf("%c", player[i]);
-		count++;
-	}
-	printf("\n");
-
-	while (length < USERNAME_LEN) {
-		state[count++] = 'p';
-		length++;
-	}
-
-	print_state(state);
-
-	printf("\n");
-}
+// static void init_state(char state[]) { memset(state, '\0', STATE_SIZE); }
+//
+// static void add_player_state(char state[], char player[])
+// {
+// 	int length = strlen(player);
+// 	int count = 74;
+//
+// 	for (; count < 320; count += 41) {
+// 		if (state[count] == '\0') {
+// 			printf("index %d in state is null\n", count);
+// 			break;
+// 		}
+// 	}
+//
+// 	printf("Player: ");
+// 	for (int i = 0; i < length; i++) {
+// 		state[count] = player[i];
+// 		printf("%c", player[i]);
+// 		count++;
+// 	}
+// 	printf("\n");
+//
+// 	while (length < USERNAME_LEN) {
+// 		state[count++] = 'p';
+// 		length++;
+// 	}
+//
+// 	print_state(state);
+//
+// 	printf("\n");
+// }
 
 // static void update_state(char state[])
 // {
@@ -75,6 +79,7 @@ static void add_player_state(char state[], char player[])
 
 static int is_username_valid(char username[])
 {
+
 	// Start at index 1 because index 0 is the op code
 	for (int i = 1; i < strlen(username); i++) {
 		if (!isalnum(username[i])) {
@@ -86,14 +91,14 @@ static int is_username_valid(char username[])
 	return 0;
 }
 
-static void print_table(char *table[])
-{
-	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		printf("Seat %d: %s\n", i, table[i]);
-	}
-}
+// static void print_table(char *table[])
+// {
+// 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+// 		printf("Seat %d: %s\n", i, table[i]);
+// 	}
+// }
 
-static void add_player(char *table[], char packet[])
+static void add_player(struct black_jack * game, char packet[])
 {
 	int seat_count = 0;
 	printf("packet: %s\n", packet);
@@ -101,15 +106,15 @@ static void add_player(char *table[], char packet[])
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
 
-		if (strncasecmp(table[i], packet, USERNAME_LEN) == 0) {
+		if (strncasecmp(game->players[i]->username, packet, USERNAME_LEN) == 0) {
 			printf("%s\n",
 			       "Username is currently being "
 			       "used in the game, try a different user name");
 			break;
 		}
 
-		if (strncasecmp(table[i], "", USERNAME_LEN) == 0) {
-			strncpy(table[i], packet, USERNAME_LEN);
+		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) == 0) {
+			strncpy(game->players[i]->username, packet, USERNAME_LEN);
 			break;
 		}
 	} // End of for loop
@@ -119,14 +124,14 @@ static void add_player(char *table[], char packet[])
 	}
 }
 
-static void clear_seats(char *table[])
-{
-	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		if (table[i] != NULL) {
-			free(table[i]);
-		}
-	}
-}
+// static void clear_seats(char *table[])
+// {
+// 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+// 		if (table[i] != NULL) {
+// 			free(table[i]);
+// 		}
+// 	}
+// }
 
 static void mem_check(void *mem)
 {
@@ -145,13 +150,12 @@ static void init_seats(char *table[])
 	}
 }
 
-static void handle_packet(char packet[])
+static void handle_packet(struct black_jack * game, char packet[])
 {
 	if (packet[0] == 1) {
 		printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
-			add_player(seats, packet);
-			add_player_state(state, packet);
+			add_player(game, packet);
 		} else {
 			printf("%s\n", "Invalid username; can only contain "
 				       "letters or digits and can't be longer "
@@ -159,6 +163,43 @@ static void handle_packet(char packet[])
 		}
 	} else {
 		printf("this is not a connect request\n");
+	}
+}
+
+void print_game(struct black_jack game)
+{
+	printf("op_code: %d\n", game.op_code);
+	printf("response_arg: %d\n", game.response_arg);
+	printf("seq_num: %d\n", game.seq_num);
+	printf("min_bet: %d\n", game.min_bet);
+	printf("active_player: %d\n", game.active_player);
+	printf("dealer_cards: %s\n", game.dealer_cards);
+
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		printf(
+		    "player %d = username:%s cards:%s min_bet:%d bank:%d\n",
+		    i, game.players[i]->username, game.players[i]->cards,
+		    game.players[i]->min_bet, game.players[i]->bank);
+	}
+}
+
+// Make sure you write a free function for this
+static void init_game(struct black_jack *game)
+{
+	game->op_code = 0;
+	game->response_arg = 0;
+	game->seq_num = 0;
+	game->min_bet = 0;
+	game->active_player = 0;
+	memset(game->dealer_cards, 0, MAX_CARDS);
+
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		game->players[i] = malloc(sizeof(struct player));
+		mem_check(game->players[i]);
+		memset(game->players[i]->username, '\0', USERNAME_LEN);
+		memset(game->players[i]->cards, '\0', MAX_CARDS);
+		game->players[i]->min_bet = 0;
+		game->players[i]->bank = 0;
 	}
 }
 
@@ -172,8 +213,24 @@ void open_connection(int socketfd)
 	// Adds socketfd to main_readfds pointer
 	FD_SET(socketfd, &main_readfds);
 
-	init_state(state);
-	printf("state before: %s\n", state);
+	struct black_jack game;
+	struct sockaddr_storage their_addr;
+	socklen_t addr_len;
+
+	init_game(&game);
+
+	printf("BEFORE\n");
+	print_game(game);
+
+	// game.op_code = 97;
+	// game.response_arg = 100;
+	// game.seq_num = 2;
+	// game.min_bet = 54;
+	// game.active_player = 1;
+	// game.dealer_cards[0] = '0';
+	// game.dealer_cards[1] = '1';
+	// printf("\nAFTER\n");
+	// print_game(game);
 
 	// This needs to terminate when control-c is pressed
 	while (1) {
@@ -198,13 +255,17 @@ void open_connection(int socketfd)
 		if (FD_ISSET(socketfd, &readfds)) {
 			char buf[1500];
 			memset(buf, '\0', 1500);
-			addr_len = sizeof(recv_addr);
+			addr_len = sizeof(their_addr);
 
 			int bytes_read =
 			    recvfrom(socketfd, buf, 1500, 0,
-				     (struct sockaddr *)&recv_addr, &addr_len);
+				     (struct sockaddr *)&their_addr, &addr_len);
 
-			printf("bytes_read[0] == 1: %d\n", buf[0] == 1);
+			handle_packet(&game, buf);
+
+			printf("%s\n", "Current game state:");
+			print_game(game);
+			printf("\n");
 
 			if (bytes_read == -1) {
 				fprintf(stderr, "%s\n",
@@ -212,22 +273,26 @@ void open_connection(int socketfd)
 				continue;
 			}
 
-			// int bytes_send =
-			//     sendto(socketfd, buf, strlen(buf), 0,
-			// 	   (struct sockaddr *)&recv_addr, addr_len);
-			//
-			// printf("bytes_sent: %d\n", bytes_send);
-			//
-			// if (bytes_send == -1) {
-			// 	fprintf(stderr, "%s\n", "bytes_send error");
-			// 	continue;
-			// }
+			char temp[320];
+			memset(temp, 0, 320);
+			temp[0] = 0;
 
-			handle_packet(buf);
+			temp[7] = 1;
+			temp[8] = 0;
+			temp[8] = 0;
+			temp[10] = 0;
 
-			printf("%s\n", "Current table:");
-			print_table(seats);
-			printf("\n");
+			int bytes_send =
+			    sendto(socketfd, temp, 320, 0,
+				   (struct sockaddr *)&their_addr, addr_len);
+
+			printf("bytes_sent: %d\n", bytes_send);
+
+			if (bytes_send == -1) {
+				fprintf(stderr, "%s\n", "bytes_send error");
+				continue;
+			}
+
 
 		} // End of if statement
 
@@ -238,10 +303,6 @@ void open_connection(int socketfd)
 
 	} // End of while loop
 
-	clear_seats(seats); // this isn't doing anything right now, you'll need
-			    // to add a signal handler and after control-c is
-			    // pressed, kill the while loop so this funciton can
-			    // run.
 }
 
 int get_socket() // DON'T forget to close this
@@ -259,7 +320,9 @@ int get_socket() // DON'T forget to close this
 	hints.ai_flags = AI_PASSIVE;
 
 	// Get avaliable addresses
-	int return_value = getaddrinfo(NULL, DEFAULT_PORT, &hints, &results);
+	// THE PORT HERE NEEDS TO BE CHANGED TO DEFAULT_PORT or whatever the
+	// port is on the command line arg
+	int return_value = getaddrinfo(NULL, TEST_PORT, &hints, &results);
 
 	// Error check for getaddrinfo
 	if (return_value != 0) {

@@ -4,7 +4,7 @@
  */
 
 #include <stdio.h>
-
+#include <stdint.h> // need to probably remove this header after, used for uint32_t;
 #include "server.h"
 
 int main(int argc, char const *argv[])
