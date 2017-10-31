@@ -25,8 +25,10 @@
 #define USERNAME_LEN 13
 #define STATE_SIZE 320
 #define MAX_CARDS 21
+#define MIN_BET 1
+#define DEFAULT_BANK 100
 
-static char *seats[NUMBER_OF_PLAYERS];
+// static char *seats[NUMBER_OF_PLAYERS];
 // static char state[STATE_SIZE];
 
 // static void print_state(char state[])
@@ -77,6 +79,23 @@ static char *seats[NUMBER_OF_PLAYERS];
 // 	print_state(state);
 // }
 
+static void mem_check(void *mem)
+{
+	if (mem == NULL) {
+		fprintf(stderr, "%s\n", "malloc fail");
+		exit(EXIT_FAILURE);
+	}
+}
+
+static char *make_packet(struct black_jack *game)
+{
+	char *packet = malloc(320);
+	mem_check(packet);
+	memset(packet, 0, 320);
+	printf("make_packet: %s\n", packet);
+	return packet;
+}
+
 static int is_username_valid(char username[])
 {
 
@@ -98,23 +117,34 @@ static int is_username_valid(char username[])
 // 	}
 // }
 
-static void add_player(struct black_jack * game, char packet[])
+static void add_player(struct black_jack *game, char packet[])
 {
 	int seat_count = 0;
-	printf("packet: %s\n", packet);
+	// printf("packet: %s\n", packet);
 	// Find an empty seat and add the player to it.
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
 
-		if (strncasecmp(game->players[i]->username, packet, USERNAME_LEN) == 0) {
+		if (strncasecmp(game->players[i]->username, packet,
+				USERNAME_LEN) == 0) {
 			printf("%s\n",
 			       "Username is currently being "
 			       "used in the game, try a different user name");
 			break;
 		}
 
-		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) == 0) {
-			strncpy(game->players[i]->username, packet, USERNAME_LEN);
+		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) ==
+		    0) {
+			// Add the player's username
+			strncpy(game->players[i]->username, packet,
+				USERNAME_LEN);
+
+			// Add the player's min_bet
+			game->players[i]->min_bet = MIN_BET;
+
+			// Add the player's bank
+			game->players[i]->bank = DEFAULT_BANK;
+
 			break;
 		}
 	} // End of for loop
@@ -133,27 +163,19 @@ static void add_player(struct black_jack * game, char packet[])
 // 	}
 // }
 
-static void mem_check(void *mem)
-{
-	if (mem == NULL) {
-		fprintf(stderr, "%s\n", "malloc fail");
-		exit(EXIT_FAILURE);
-	}
-}
+// static void init_seats(char *table[])
+// {
+// 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+// 		table[i] = malloc(USERNAME_LEN + 1);
+// 		mem_check(table[i]);
+// 		memset(table[i], '\0', USERNAME_LEN);
+// 	}
+// }
 
-static void init_seats(char *table[])
-{
-	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		table[i] = malloc(USERNAME_LEN + 1);
-		mem_check(table[i]);
-		memset(table[i], '\0', USERNAME_LEN);
-	}
-}
-
-static void handle_packet(struct black_jack * game, char packet[])
+static void handle_packet(struct black_jack *game, char packet[])
 {
 	if (packet[0] == 1) {
-		printf("%s\n", "this is a connect request");
+		// printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
 			add_player(game, packet);
 		} else {
@@ -176,10 +198,9 @@ void print_game(struct black_jack game)
 	printf("dealer_cards: %s\n", game.dealer_cards);
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		printf(
-		    "player %d = username:%s cards:%s min_bet:%d bank:%d\n",
-		    i, game.players[i]->username, game.players[i]->cards,
-		    game.players[i]->min_bet, game.players[i]->bank);
+		printf("player %d = username:%s cards:%s min_bet:%d bank:%d\n",
+		       i, game.players[i]->username, game.players[i]->cards,
+		       game.players[i]->min_bet, game.players[i]->bank);
 	}
 }
 
@@ -203,9 +224,11 @@ static void init_game(struct black_jack *game)
 	}
 }
 
+// static void clear_game(struct black *game) {}
+
 void open_connection(int socketfd)
 {
-	init_seats(seats); // This isn't being freed right now.
+	// init_seats(seats); // This isn't being freed right now.
 	// Declare main_readfds as fd_set
 	fd_set main_readfds;
 	// Initializes main_readfds
@@ -219,8 +242,9 @@ void open_connection(int socketfd)
 
 	init_game(&game);
 
-	printf("BEFORE\n");
+	printf("Struct before:\n");
 	print_game(game);
+	printf("\n");
 
 	// game.op_code = 97;
 	// game.response_arg = 100;
@@ -261,11 +285,11 @@ void open_connection(int socketfd)
 			    recvfrom(socketfd, buf, 1500, 0,
 				     (struct sockaddr *)&their_addr, &addr_len);
 
-			handle_packet(&game, buf);
-
-			printf("%s\n", "Current game state:");
-			print_game(game);
-			printf("\n");
+			// handle_packet(&game, buf);
+			//
+			// printf("%s\n", "Struct current:");
+			// print_game(game);
+			// printf("\n");
 
 			if (bytes_read == -1) {
 				fprintf(stderr, "%s\n",
@@ -273,10 +297,15 @@ void open_connection(int socketfd)
 				continue;
 			}
 
+			handle_packet(&game, buf);
+
+			printf("%s\n", "Struct current:");
+			print_game(game);
+			printf("\n");
+
 			char temp[320];
 			memset(temp, 0, 320);
 			temp[0] = 0;
-
 			temp[7] = 1;
 			temp[8] = 0;
 			temp[8] = 0;
@@ -286,13 +315,12 @@ void open_connection(int socketfd)
 			    sendto(socketfd, temp, 320, 0,
 				   (struct sockaddr *)&their_addr, addr_len);
 
-			printf("bytes_sent: %d\n", bytes_send);
+			// printf("bytes_sent: %d\n", bytes_send);
 
 			if (bytes_send == -1) {
 				fprintf(stderr, "%s\n", "bytes_send error");
 				continue;
 			}
-
 
 		} // End of if statement
 
@@ -302,7 +330,6 @@ void open_connection(int socketfd)
 		}
 
 	} // End of while loop
-
 }
 
 int get_socket() // DON'T forget to close this
