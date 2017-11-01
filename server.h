@@ -7,7 +7,7 @@
 struct player {
         char username[13];
         char cards[21];
-        uint32_t min_bet;
+        uint32_t bet;
         uint32_t bank;
 };
 

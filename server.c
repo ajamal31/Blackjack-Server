@@ -44,12 +44,80 @@ static void print_packet(char *packet)
 			printf("%c", '0');
 		} else if (packet[i] == 1) {
 			printf("%c", '1');
-		}
-		else {
+		} else {
 			printf("%c", packet[i]);
 		}
 	}
 	printf("\n");
+}
+
+static void store_min_bet(struct black_jack *game, char *packet)
+{
+
+	// Store the min bet (see if you can understand why this is working)
+	uint32_t min_bet = game->min_bet;
+	packet[7] = (min_bet >> 24) | packet[7];
+	packet[8] = (min_bet >> 16) | packet[8];
+	packet[9] = (min_bet >> 8) | packet[9];
+	packet[10] = min_bet | packet[10];
+}
+
+static void store_player(char *username, char *packet, int index)
+{
+	int character_tracker = 1; // 1 because you stored the the whole connect
+				   // request in the struct
+
+	if (index == 0) {
+
+		for (int i = 33; i < 33 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else if (index == 1) {
+
+		for (int i = 74; i < 74 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else if (index == 2) {
+
+		for (int i = 115; i < 115 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else if (index == 3) {
+
+		for (int i = 156; i < 156 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else if (index == 4) {
+
+		for (int i = 197; i < 197 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else if (index == 5) {
+		for (int i = 238; i < 238 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else if (index == 6) {
+
+		for (int i = 279; i < 279 + strlen(username); i++)
+			packet[i] = username[character_tracker++];
+
+		character_tracker = 1;
+
+	} else {
+		printf("%s\n", "INDEX OUT OF RANGE IN STORE_PLAYER!");
+	}
 }
 
 static char *make_packet(struct black_jack *game)
@@ -58,12 +126,15 @@ static char *make_packet(struct black_jack *game)
 	mem_check(packet);
 	memset(packet, 0, 320);
 
-	// Store the min bet
-	uint32_t min_bet = game->min_bet;
-	packet[7] = (min_bet >> 24) | packet[7];
-	packet[8] = (min_bet >> 16) | packet[8];
-	packet[9] = (min_bet >> 8) | packet[9];
-	packet[10] = min_bet | packet[10];
+	store_min_bet(game, packet);
+
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+
+		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
+		    0) {
+			store_player(game->players[i]->username, packet, i);
+		}
+	}
 
 	return packet;
 }
@@ -104,9 +175,6 @@ static void add_player(struct black_jack *game, char packet[])
 			strncpy(game->players[i]->username, packet,
 				USERNAME_LEN);
 
-			// Add the player's min_bet
-			game->players[i]->min_bet = MIN_BET;
-
 			// Add the player's bank
 			game->players[i]->bank = DEFAULT_BANK;
 
@@ -145,9 +213,9 @@ void print_game(struct black_jack game)
 	printf("dealer_cards: %s\n", game.dealer_cards);
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		printf("player %d = username:%s cards:%s min_bet:%d bank:%d\n",
-		       i, game.players[i]->username, game.players[i]->cards,
-		       game.players[i]->min_bet, game.players[i]->bank);
+		printf("player %d = username:%s cards:%s bet:%d bank:%d\n", i,
+		       game.players[i]->username, game.players[i]->cards,
+		       game.players[i]->bet, game.players[i]->bank);
 	}
 }
 
@@ -166,7 +234,7 @@ static void init_game(struct black_jack *game)
 		mem_check(game->players[i]);
 		memset(game->players[i]->username, '\0', USERNAME_LEN);
 		memset(game->players[i]->cards, '\0', MAX_CARDS);
-		game->players[i]->min_bet = 0;
+		game->players[i]->bet = 0;
 		game->players[i]->bank = 0;
 	}
 }
@@ -238,19 +306,9 @@ void open_connection(int socketfd)
 			game_packet = make_packet(&game);
 			print_packet(game_packet);
 
-			char temp[320];
-			memset(temp, 0, 320);
-			temp[0] = 0;
-			temp[7] = 1;
-			temp[8] = 0;
-			temp[8] = 0;
-			temp[10] = 0;
-
 			int bytes_send =
 			    sendto(socketfd, game_packet, 320, 0,
 				   (struct sockaddr *)&their_addr, addr_len);
-
-			// printf("bytes_sent: %d\n", bytes_send);
 
 			if (bytes_send == -1) {
 				fprintf(stderr, "%s\n", "bytes_send error");
