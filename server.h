@@ -2,6 +2,8 @@
  * Description: Function declarations for the all the functions in server.c
  */
 
+#include <stdint.h>
+
 struct player {
         char username[13];
         char cards[21];
