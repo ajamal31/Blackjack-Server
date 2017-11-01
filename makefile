@@ -14,7 +14,5 @@ blackjack.o: blackjack.c server.h
 
 server: server.c server.h
 
-.PHONY: clean
-
 clean:
 	$(RM) blackjack blackjack.o server.o
