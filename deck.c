@@ -54,8 +54,8 @@ int card_value(char card)
 	int value = card % 13;
 
 	// This is the value of the king
-	if (value == 0) {
-		return 13;
+	if (value == 0 || value == 12 || value == 11) {
+		return 10;
 	}
 
 	return value;
