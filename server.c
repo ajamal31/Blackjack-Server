@@ -28,6 +28,7 @@
 #define MIN_BET 1
 #define DEFAULT_BANK 100
 #define DEFAULT_NUM_OF_DECKS 2
+#define DEALER 999
 
 static void mem_check(void *mem)
 {
@@ -61,6 +62,7 @@ static void store_four_bytes(uint32_t data, char *packet, int index)
 	packet[index + 3] = data | packet[index + 3];
 }
 
+// Put the player's information in the packet
 static void store_player(struct player *p, char *packet, int index)
 {
 	int character_tracker = 1; // 1 because you stored the the whole connect
@@ -119,14 +121,34 @@ static void store_player(struct player *p, char *packet, int index)
 	}
 }
 
+static void store_dealer_cards(char *dealer_cards, char *packet)
+{
+	printf("store_dealer_card[0]: %d\n", dealer_cards[0]);
+	int byte_tracker = 12;
+	for (int i = 0; i < MAX_CARDS; i++) {
+		if (dealer_cards[i] != 0) {
+			printf("empty spot at %d\n", i);
+			packet[byte_tracker] = dealer_cards[i];
+			byte_tracker++;
+		} else {
+			break;
+		}
+	}
+}
+
 static char *make_packet(struct black_jack *game)
 {
 	char *packet = malloc(320);
 	mem_check(packet);
 	memset(packet, 0, 320);
 
+	packet[0] = game->op_code;
+	packet[11] = game->active_player;
+
 	// Store the min bet
 	store_four_bytes(game->min_bet, packet, 7);
+
+	store_dealer_cards(game->dealer_cards, packet);
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 
@@ -235,6 +257,20 @@ void print_game(struct black_jack game)
 	}
 }
 
+static void draw(struct black_jack *game, int index)
+{
+	// 10 is used to check if the dealer is a drawing a card or not
+	if (index == DEALER) {
+
+		for (int i = 0; i < MAX_CARDS; i++) {
+			if (game->dealer_cards[i] == 0) {
+				game->dealer_cards[i] = draw_card(game->cards);
+				break;
+			}
+		}
+	}
+}
+
 // Make sure you write a free function for this
 static void init_game(struct black_jack *game)
 {
@@ -248,10 +284,16 @@ static void init_game(struct black_jack *game)
 	char *deck = make_deck(DEFAULT_NUM_OF_DECKS);
 	game->cards = deck;
 
-	printf("draw_card: %d\n", draw_card(game->cards));
-	printf("draw_card: %d\n", draw_card(game->cards));
-	printf("draw_card: %d\n", draw_card(game->cards));
-	printf("draw_card: %d\n", draw_card(game->cards));
+	// store the first card because on launch a card has to be there?
+	draw(game, DEALER);
+	// draw(game, DEALER);
+	// draw(game, DEALER);
+	// draw(game, DEALER);
+	// draw(game, DEALER);draw(game, DEALER);
+	// draw(game, DEALER);
+	// draw(game, DEALER);
+	// draw(game, DEALER);
+	// draw(game, DEALER);
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		game->players[i] = malloc(sizeof(struct player));
@@ -267,7 +309,7 @@ static void init_game(struct black_jack *game)
 
 void open_connection(int socketfd)
 {
-	// init_seats(seats); // This isn't being freed right now.
+
 	// Declare main_readfds as fd_set
 	fd_set main_readfds;
 	// Initializes main_readfds
