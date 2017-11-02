@@ -62,6 +62,15 @@ static void store_four_bytes(uint32_t data, char *packet, int index)
 	packet[index + 3] = data | packet[index + 3];
 }
 
+static void store_two_bytes(uint16_t data, char *packet, int index)
+{
+	// Store the bytes (see if you can understand why this is working)
+	packet[index] = (data >> 8) | packet[index];
+	packet[index + 1] = data | packet[index + 1];
+	// packet[index + 2] = (data >> 8) | packet[index + 2];
+	// packet[index + 3] = data | packet[index + 3];
+}
+
 // Put the player's information in the packet
 static void store_player(struct player *p, char *packet, int index)
 {
@@ -74,6 +83,7 @@ static void store_player(struct player *p, char *packet, int index)
 
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 45);
+		store_four_bytes(p->bet, packet, 49);
 
 	} else if (index == 1) {
 		for (int i = 74; i < 74 + strlen(username); i++)
@@ -123,11 +133,11 @@ static void store_player(struct player *p, char *packet, int index)
 
 static void store_dealer_cards(char *dealer_cards, char *packet)
 {
-	printf("store_dealer_card[0]: %d\n", dealer_cards[0]);
+	// printf("store_dealer_card[0]: %d\n", dealer_cards[0]);
 	int byte_tracker = 12;
 	for (int i = 0; i < MAX_CARDS; i++) {
 		if (dealer_cards[i] != 0) {
-			printf("empty spot at %d\n", i);
+			// printf("empty spot at %d\n", i);
 			packet[byte_tracker] = dealer_cards[i];
 			byte_tracker++;
 		} else {
@@ -143,15 +153,14 @@ static char *make_packet(struct black_jack *game)
 	memset(packet, 0, 320);
 
 	packet[0] = game->op_code;
-	packet[11] = game->active_player;
-
+	store_four_bytes(game->response_arg, packet, 1);
+	store_two_bytes(game->seq_num, packet, 5);
 	// Store the min bet
 	store_four_bytes(game->min_bet, packet, 7);
-
+	packet[11] = game->active_player;
 	store_dealer_cards(game->dealer_cards, packet);
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-
 		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
 		    0) {
 			store_player(game->players[i], packet, i);
@@ -178,6 +187,7 @@ static void add_player(struct black_jack *game, char packet[])
 {
 	int seat_count = 0;
 	// printf("packet: %s\n", packet);
+
 	// Find an empty seat and add the player to it.
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
@@ -199,6 +209,12 @@ static void add_player(struct black_jack *game, char packet[])
 			// Add the player's bank
 			game->players[i]->bank = DEFAULT_BANK;
 
+			// game->players[i]->bet = MIN_BET;
+
+			if (game->active_player == 0) {
+				game->active_player = i + 1;
+			}
+
 			break;
 		}
 	} // End of for loop
@@ -208,8 +224,39 @@ static void add_player(struct black_jack *game, char packet[])
 	}
 }
 
+static void update_bet(struct black_jack *game, char packet[]) {
+	int current_player = game->active_player -1;
+	int bet_amount = 0;
+	bet_amount = bet_amount | packet[1] << 24;
+	bet_amount = bet_amount | packet[2] << 16;
+	bet_amount = bet_amount | packet[3] << 8;
+	bet_amount = bet_amount | packet[4];
+
+	game->players[current_player]->bet = bet_amount;
+
+	printf("bet_amount: %d\n", bet_amount );
+
+	printf("update_best, active_player: %d\n", current_player);
+
+	printf("game->players[current_player]->bet: %d\n", game->players[current_player]->bet);
+
+}
+
 static void handle_packet(struct black_jack *game, char packet[])
 {
+	// printf("handle_packet[0]: %d\n", packet[0]);
+	// printf("handle_packet[1]: %d\n", packet[1]);
+	// printf("handle_packet[2]: %d\n", packet[2]);
+	// if (packet[0] == 4) {
+	// 	printf("%s\n", "HIT!");
+	// }
+	// Everytime a packet is received, this needs to be updated.
+	game->seq_num += 1;
+
+	if (game->seq_num == 3) {
+		exit(EXIT_FAILURE);
+	}
+
 	if (packet[0] == 1) {
 		// printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
@@ -220,6 +267,7 @@ static void handle_packet(struct black_jack *game, char packet[])
 				       "than 12 characters");
 		}
 	} else if (packet[0] == 2) {
+		update_bet(game, packet);
 		printf("this is a bet request\n");
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
@@ -322,6 +370,7 @@ void open_connection(int socketfd)
 	socklen_t addr_len;
 	char *game_packet;
 
+	// Initialize the game board
 	init_game(&game);
 
 	printf("Struct before:\n");
@@ -370,7 +419,7 @@ void open_connection(int socketfd)
 			printf("\n");
 
 			game_packet = make_packet(&game);
-			print_packet(game_packet);
+			// print_packet(game_packet);
 
 			int bytes_send =
 			    sendto(socketfd, game_packet, 320, 0,
