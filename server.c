@@ -71,6 +71,14 @@ static void store_two_bytes(uint16_t data, char *packet, int index)
 	// packet[index + 3] = data | packet[index + 3];
 }
 
+static void store_player_cards(char *cards, char *packet, int index) {
+	int cards_amount = strlen(cards);
+	printf("cards_amount: %d\n", cards_amount);
+	for (int i =0; i< cards_amount; i++) {
+		packet[index++]= cards[i];
+	}
+}
+
 // Put the player's information in the packet
 static void store_player(struct player *p, char *packet, int index)
 {
@@ -84,6 +92,7 @@ static void store_player(struct player *p, char *packet, int index)
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 45);
 		store_four_bytes(p->bet, packet, 49);
+		store_player_cards(p->cards, packet, 53);
 
 	} else if (index == 1) {
 		for (int i = 74; i < 74 + strlen(username); i++)
