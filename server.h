@@ -18,6 +18,7 @@ struct black_jack {
         uint32_t min_bet;
         char active_player;
         char dealer_cards[21];
+        char * cards;
         struct player * players[7];
 };
 
@@ -26,3 +27,9 @@ int get_socket();
 void open_connection(int socketfd);
 
 void print_game(struct black_jack);
+
+char * make_deck(int deck_size);
+
+void print_deck (char * deck);
+
+char draw_card(char * deck);

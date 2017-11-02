@@ -27,6 +27,7 @@
 #define MAX_CARDS 21
 #define MIN_BET 1
 #define DEFAULT_BANK 100
+#define DEFAULT_NUM_OF_DECKS 2
 
 static void mem_check(void *mem)
 {
@@ -51,69 +52,67 @@ static void print_packet(char *packet)
 	printf("\n");
 }
 
-static void store_min_bet(struct black_jack *game, char *packet)
+static void store_four_bytes(uint32_t data, char *packet, int index)
 {
-
-	// Store the min bet (see if you can understand why this is working)
-	uint32_t min_bet = game->min_bet;
-	packet[7] = (min_bet >> 24) | packet[7];
-	packet[8] = (min_bet >> 16) | packet[8];
-	packet[9] = (min_bet >> 8) | packet[9];
-	packet[10] = min_bet | packet[10];
+	// Store the bytes (see if you can understand why this is working)
+	packet[index] = (data >> 24) | packet[index];
+	packet[index + 1] = (data >> 16) | packet[index + 1];
+	packet[index + 2] = (data >> 8) | packet[index + 2];
+	packet[index + 3] = data | packet[index + 3];
 }
 
-static void store_player(char *username, char *packet, int index)
+static void store_player(struct player *p, char *packet, int index)
 {
 	int character_tracker = 1; // 1 because you stored the the whole connect
 				   // request in the struct
-
+	char *username = p->username;
 	if (index == 0) {
-
 		for (int i = 33; i < 33 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
+		store_four_bytes(p->bank, packet, 45);
 
 	} else if (index == 1) {
-
 		for (int i = 74; i < 74 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
-
+		store_four_bytes(p->bank, packet, 86);
 	} else if (index == 2) {
-
 		for (int i = 115; i < 115 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
+		store_four_bytes(p->bank, packet, 127);
 
 	} else if (index == 3) {
-
 		for (int i = 156; i < 156 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
+		store_four_bytes(p->bank, packet, 168);
 
 	} else if (index == 4) {
-
 		for (int i = 197; i < 197 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
+		store_four_bytes(p->bank, packet, 209);
 
 	} else if (index == 5) {
 		for (int i = 238; i < 238 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
+		store_four_bytes(p->bank, packet, 250);
 
 	} else if (index == 6) {
-
 		for (int i = 279; i < 279 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
 
 		character_tracker = 1;
+		store_four_bytes(p->bank, packet, 291);
 
 	} else {
 		printf("%s\n", "INDEX OUT OF RANGE IN STORE_PLAYER!");
@@ -126,13 +125,14 @@ static char *make_packet(struct black_jack *game)
 	mem_check(packet);
 	memset(packet, 0, 320);
 
-	store_min_bet(game, packet);
+	// Store the min bet
+	store_four_bytes(game->min_bet, packet, 7);
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 
 		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
 		    0) {
-			store_player(game->players[i]->username, packet, i);
+			store_player(game->players[i], packet, i);
 		}
 	}
 
@@ -141,7 +141,6 @@ static char *make_packet(struct black_jack *game)
 
 static int is_username_valid(char username[])
 {
-
 	// Start at index 1 because index 0 is the op code
 	for (int i = 1; i < strlen(username); i++) {
 		if (!isalnum(username[i])) {
@@ -198,8 +197,22 @@ static void handle_packet(struct black_jack *game, char packet[])
 				       "letters or digits and can't be longer "
 				       "than 12 characters");
 		}
+	} else if (packet[0] == 2) {
+		printf("this is a bet request\n");
+	} else if (packet[0] == 3) {
+		printf("this is a stand request\n");
+	} else if (packet[0] == 4) {
+		printf("this is a hit request\n");
+	} else if (packet[0] == 5) {
+		printf("this is a quit request\n");
+	} else if (packet[0] == 6) {
+		printf("this is an error request\n");
+	} else if (packet[0] == 7) {
+		printf("this is a message request\n");
+	} else if (packet[0] == 8) {
+		printf("this is an ack request\n");
 	} else {
-		printf("this is not a connect request\n");
+		printf("this is not a valid request\n");
 	}
 }
 
@@ -211,6 +224,9 @@ void print_game(struct black_jack game)
 	printf("min_bet: %d\n", game.min_bet);
 	printf("active_player: %d\n", game.active_player);
 	printf("dealer_cards: %s\n", game.dealer_cards);
+	printf("cards: ");
+	print_deck(game.cards);
+	printf("\n");
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		printf("player %d = username:%s cards:%s bet:%d bank:%d\n", i,
@@ -228,6 +244,14 @@ static void init_game(struct black_jack *game)
 	game->min_bet = MIN_BET;
 	game->active_player = 0;
 	memset(game->dealer_cards, 0, MAX_CARDS);
+
+	char *deck = make_deck(DEFAULT_NUM_OF_DECKS);
+	game->cards = deck;
+
+	printf("draw_card: %d\n", draw_card(game->cards));
+	printf("draw_card: %d\n", draw_card(game->cards));
+	printf("draw_card: %d\n", draw_card(game->cards));
+	printf("draw_card: %d\n", draw_card(game->cards));
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		game->players[i] = malloc(sizeof(struct player));
