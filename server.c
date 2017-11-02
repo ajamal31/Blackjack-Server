@@ -224,8 +224,9 @@ static void add_player(struct black_jack *game, char packet[])
 	}
 }
 
-static void update_bet(struct black_jack *game, char packet[]) {
-	int current_player = game->active_player -1;
+static void update_bet(struct black_jack *game, char packet[])
+{
+	int current_player = game->active_player - 1;
 	int bet_amount = 0;
 	bet_amount = bet_amount | packet[1] << 24;
 	bet_amount = bet_amount | packet[2] << 16;
@@ -234,17 +235,36 @@ static void update_bet(struct black_jack *game, char packet[]) {
 
 	game->players[current_player]->bet = bet_amount;
 
-	printf("bet_amount: %d\n", bet_amount );
+	printf("bet_amount: %d\n", bet_amount);
 
 	printf("update_best, active_player: %d\n", current_player);
 
-	printf("game->players[current_player]->bet: %d\n", game->players[current_player]->bet);
+	printf("game->players[current_player]->bet: %d\n",
+	       game->players[current_player]->bet);
+}
 
+static void draw(struct black_jack *game, int index)
+{
+	// 10 is used to check if the dealer is a drawing a card or not
+	if (index == DEALER) {
+		for (int i = 0; i < MAX_CARDS; i++) {
+			if (game->dealer_cards[i] == 0) {
+				game->dealer_cards[i] = draw_card(game->cards);
+				break;
+			}
+		}
+	} else {
+		int position = strlen(game->players[index]->cards);
+		printf("position: %d\n", position);
+		game->players[index]->cards[position] = draw_card(game->cards);
+		printf("game->players[index]->cards[position]: %d\n",
+		       game->players[index]->cards[position]);
+	}
 }
 
 static void handle_packet(struct black_jack *game, char packet[])
 {
-	// printf("handle_packet[0]: %d\n", packet[0]);
+
 	// printf("handle_packet[1]: %d\n", packet[1]);
 	// printf("handle_packet[2]: %d\n", packet[2]);
 	// if (packet[0] == 4) {
@@ -252,10 +272,6 @@ static void handle_packet(struct black_jack *game, char packet[])
 	// }
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
-
-	if (game->seq_num == 3) {
-		exit(EXIT_FAILURE);
-	}
 
 	if (packet[0] == 1) {
 		// printf("%s\n", "this is a connect request");
@@ -272,6 +288,9 @@ static void handle_packet(struct black_jack *game, char packet[])
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
 	} else if (packet[0] == 4) {
+		printf("game->active_player) - 1: %d\n",
+		       (game->active_player) - 1);
+		draw(game, (game->active_player) - 1);
 		printf("this is a hit request\n");
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
@@ -305,19 +324,21 @@ void print_game(struct black_jack game)
 	}
 }
 
-static void draw(struct black_jack *game, int index)
-{
-	// 10 is used to check if the dealer is a drawing a card or not
-	if (index == DEALER) {
-
-		for (int i = 0; i < MAX_CARDS; i++) {
-			if (game->dealer_cards[i] == 0) {
-				game->dealer_cards[i] = draw_card(game->cards);
-				break;
-			}
-		}
-	}
-}
+// static void draw(struct black_jack *game, int index)
+// {
+// 	// 10 is used to check if the dealer is a drawing a card or not
+// 	if (index == DEALER) {
+// 		for (int i = 0; i < MAX_CARDS; i++) {
+// 			if (game->dealer_cards[i] == 0) {
+// 				game->dealer_cards[i] = draw_card(game->cards);
+// 				break;
+// 			}
+// 		}
+// 	} else {
+// 		int position = strlen(game->players[index]->cards) - 1;
+// 		game->players[index]->cards[position] = draw_card(game->cards);
+// 	}
+// }
 
 // Make sure you write a free function for this
 static void init_game(struct black_jack *game)
@@ -418,6 +439,8 @@ void open_connection(int socketfd)
 			print_game(game);
 			printf("\n");
 
+			// MEMORY LEAK HERE, BUILD THE PACKET ONCE AND KEEP
+			// UPDATING IT.
 			game_packet = make_packet(&game);
 			// print_packet(game_packet);
 
