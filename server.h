@@ -9,6 +9,7 @@ struct player {
         char cards[21];
         uint32_t bet;
         uint32_t bank;
+        int count;
 };
 
 struct black_jack {
@@ -33,3 +34,5 @@ char * make_deck(int deck_size);
 void print_deck (char * deck);
 
 char draw_card(char * deck);
+
+int card_value(char card);

@@ -71,11 +71,12 @@ static void store_two_bytes(uint16_t data, char *packet, int index)
 	// packet[index + 3] = data | packet[index + 3];
 }
 
-static void store_player_cards(char *cards, char *packet, int index) {
+static void store_player_cards(char *cards, char *packet, int index)
+{
 	int cards_amount = strlen(cards);
-	printf("cards_amount: %d\n", cards_amount);
-	for (int i =0; i< cards_amount; i++) {
-		packet[index++]= cards[i];
+	// printf("cards_amount: %d\n", cards_amount);
+	for (int i = 0; i < cards_amount; i++) {
+		packet[index++] = cards[i];
 	}
 }
 
@@ -100,6 +101,8 @@ static void store_player(struct player *p, char *packet, int index)
 
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 86);
+		store_four_bytes(p->bet, packet, 90);
+		store_player_cards(p->cards, packet, 94);
 	} else if (index == 2) {
 		for (int i = 115; i < 115 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
@@ -155,7 +158,7 @@ static void store_dealer_cards(char *dealer_cards, char *packet)
 	}
 }
 
-static char *make_packet(struct black_jack *game)
+static char *update_packet(struct black_jack *game)
 {
 	char *packet = malloc(320);
 	mem_check(packet);
@@ -244,43 +247,43 @@ static void update_bet(struct black_jack *game, char packet[])
 
 	game->players[current_player]->bet = bet_amount;
 
-	printf("bet_amount: %d\n", bet_amount);
-
-	printf("update_best, active_player: %d\n", current_player);
-
-	printf("game->players[current_player]->bet: %d\n",
-	       game->players[current_player]->bet);
+	// printf("bet_amount: %d\n", bet_amount);
+	//
+	// printf("update_best, active_player: %d\n", current_player);
+	//
+	// printf("game->players[current_player]->bet: %d\n",
+	//        game->players[current_player]->bet);
 }
 
-static void draw(struct black_jack *game, int index)
+static char draw(struct black_jack *game, int index)
 {
+	char card = draw_card(game->cards);
+	// printf("card in draw: %d\n", card);
 	// 10 is used to check if the dealer is a drawing a card or not
 	if (index == DEALER) {
 		for (int i = 0; i < MAX_CARDS; i++) {
 			if (game->dealer_cards[i] == 0) {
-				game->dealer_cards[i] = draw_card(game->cards);
+				game->dealer_cards[i] = card;
 				break;
 			}
 		}
 	} else {
+		// Find out which position in the array to place the card in.
 		int position = strlen(game->players[index]->cards);
-		printf("position: %d\n", position);
-		game->players[index]->cards[position] = draw_card(game->cards);
-		printf("game->players[index]->cards[position]: %d\n",
-		       game->players[index]->cards[position]);
+		// printf("position: %d\n", position);
+		game->players[index]->cards[position] = card;
+		// printf("game->players[index]->cards[position]: %d\n",
+		//        game->players[index]->cards[position]);
 	}
+
+	return card;
 }
 
 static void handle_packet(struct black_jack *game, char packet[])
 {
-
-	// printf("handle_packet[1]: %d\n", packet[1]);
-	// printf("handle_packet[2]: %d\n", packet[2]);
-	// if (packet[0] == 4) {
-	// 	printf("%s\n", "HIT!");
-	// }
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
+	char card;
 
 	if (packet[0] == 1) {
 		// printf("%s\n", "this is a connect request");
@@ -297,9 +300,10 @@ static void handle_packet(struct black_jack *game, char packet[])
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
 	} else if (packet[0] == 4) {
-		printf("game->active_player) - 1: %d\n",
-		       (game->active_player) - 1);
-		draw(game, (game->active_player) - 1);
+		printf("active_player: %d\n", (game->active_player) - 1);
+		card = draw(game, (game->active_player) - 1);
+		printf("card_value(%d): %d\n", card, card_value(card) );
+		// game->active_player +=1;
 		printf("this is a hit request\n");
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
@@ -333,22 +337,6 @@ void print_game(struct black_jack game)
 	}
 }
 
-// static void draw(struct black_jack *game, int index)
-// {
-// 	// 10 is used to check if the dealer is a drawing a card or not
-// 	if (index == DEALER) {
-// 		for (int i = 0; i < MAX_CARDS; i++) {
-// 			if (game->dealer_cards[i] == 0) {
-// 				game->dealer_cards[i] = draw_card(game->cards);
-// 				break;
-// 			}
-// 		}
-// 	} else {
-// 		int position = strlen(game->players[index]->cards) - 1;
-// 		game->players[index]->cards[position] = draw_card(game->cards);
-// 	}
-// }
-
 // Make sure you write a free function for this
 static void init_game(struct black_jack *game)
 {
@@ -363,15 +351,8 @@ static void init_game(struct black_jack *game)
 	game->cards = deck;
 
 	// store the first card because on launch a card has to be there?
-	draw(game, DEALER);
-	// draw(game, DEALER);
-	// draw(game, DEALER);
-	// draw(game, DEALER);
-	// draw(game, DEALER);draw(game, DEALER);
-	// draw(game, DEALER);
-	// draw(game, DEALER);
-	// draw(game, DEALER);
-	// draw(game, DEALER);
+	char card = draw(game, DEALER);
+	printf("card_value(%d): %d\n", card, card_value(card) );
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		game->players[i] = malloc(sizeof(struct player));
@@ -387,31 +368,33 @@ static void init_game(struct black_jack *game)
 
 void open_connection(int socketfd)
 {
-
 	// Declare main_readfds as fd_set
 	fd_set main_readfds;
+
 	// Initializes main_readfds
 	FD_ZERO(&main_readfds);
+
 	// Adds socketfd to main_readfds pointer
 	FD_SET(socketfd, &main_readfds);
 
 	struct black_jack game;
 	struct sockaddr_storage their_addr;
-	socklen_t addr_len;
+	socklen_t addr_len = sizeof(their_addr);
 	char *game_packet;
+	char buf[500];
 
 	// Initialize the game board
 	init_game(&game);
 
-	printf("Struct before:\n");
-	print_game(game);
-	printf("\n");
+	// printf("Struct before:\n");
+	// print_game(game);
+	// printf("\n");
 
 	// This needs to terminate when control-c is pressed
 	while (1) {
 		struct timeval timeout = {
-		    .tv_sec = 0,
-		    .tv_usec = 100e3, // 100 ms
+		    .tv_sec = 3,
+		    .tv_usec = 0, // 100 ms
 		};
 
 		// Copy the main_readfds because they will change as select is
@@ -428,12 +411,10 @@ void open_connection(int socketfd)
 		}
 
 		if (FD_ISSET(socketfd, &readfds)) {
-			char buf[1500];
-			memset(buf, '\0', 1500);
-			addr_len = sizeof(their_addr);
+			memset(buf, '\0', 500);
 
 			int bytes_read =
-			    recvfrom(socketfd, buf, 1500, 0,
+			    recvfrom(socketfd, buf, 500, 0,
 				     (struct sockaddr *)&their_addr, &addr_len);
 
 			if (bytes_read == -1) {
@@ -444,13 +425,13 @@ void open_connection(int socketfd)
 
 			handle_packet(&game, buf);
 
-			printf("%s\n", "Struct current:");
-			print_game(game);
-			printf("\n");
+			// printf("%s\n", "Struct current:");
+			// print_game(game);
+			// printf("\n");
 
 			// MEMORY LEAK HERE, BUILD THE PACKET ONCE AND KEEP
 			// UPDATING IT.
-			game_packet = make_packet(&game);
+			game_packet = update_packet(&game);
 			// print_packet(game_packet);
 
 			int bytes_send =
@@ -465,8 +446,7 @@ void open_connection(int socketfd)
 		} // End of if statement
 
 		if (bytes_ready == 0) {
-			// might need this later so you left it but remove if
-			// it's not needed.
+			// printf("timeout!\n");
 		}
 
 	} // End of while loop

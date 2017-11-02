@@ -48,3 +48,15 @@ char draw_card(char *deck)
 	deck[strlen(deck) - 1] = '\0';
 	return card;
 }
+
+int card_value(char card)
+{
+	int value = card % 13;
+
+	// This is the value of the king
+	if (value == 0) {
+		return 13;
+	}
+
+	return value;
+}
