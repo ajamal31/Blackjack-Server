@@ -236,7 +236,7 @@ static void add_player(struct black_jack *game, char packet[])
 	}
 }
 
-static void update_bet(struct black_jack *game, char packet[])
+static void store_bet(struct black_jack *game, char packet[])
 {
 	int current_player = game->active_player - 1;
 	int bet_amount = 0;
@@ -279,11 +279,26 @@ static char draw(struct black_jack *game, int index)
 	return card;
 }
 
+static void update_hand_value (struct black_jack * game) {
+	char card;
+	int active_player = (game->active_player) - 1;
+	struct player * p = game->players[active_player];
+	card = draw(game, active_player);
+	p->hand_value += card_value(card);
+
+	printf("players: %d's hand_value: %d\n", active_player,  p->hand_value);
+
+	if (p->hand_value > 21) {
+		p-> bank -= p->bet;
+		p->bet = 0;
+		printf("You're over 21, you lose!\n");
+	}
+}
+
 static void handle_packet(struct black_jack *game, char packet[])
 {
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
-	char card;
 
 	if (packet[0] == 1) {
 		// printf("%s\n", "this is a connect request");
@@ -295,15 +310,12 @@ static void handle_packet(struct black_jack *game, char packet[])
 				       "than 12 characters");
 		}
 	} else if (packet[0] == 2) {
-		update_bet(game, packet);
+		store_bet(game, packet);
 		printf("this is a bet request\n");
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
 	} else if (packet[0] == 4) {
-		printf("active_player: %d\n", (game->active_player) - 1);
-		card = draw(game, (game->active_player) - 1);
-		printf("card_value(%d): %d\n", card, card_value(card) );
-		// game->active_player +=1;
+		update_hand_value(game);
 		printf("this is a hit request\n");
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");

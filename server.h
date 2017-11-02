@@ -9,7 +9,7 @@ struct player {
         char cards[21];
         uint32_t bet;
         uint32_t bank;
-        int count;
+        int hand_value;
 };
 
 struct black_jack {
