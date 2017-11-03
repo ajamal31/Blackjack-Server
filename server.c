@@ -32,6 +32,7 @@
 #define DEALER 999
 #define NO_MONEY 61
 #define DEALER_TOTAL 16
+#define BLACKJACK_VALUE 21
 
 // Checks if memory allocation was a success or a fail
 static void mem_check(void *mem)
@@ -56,6 +57,8 @@ static void print_packet(char *packet)
 	printf("\n");
 }
 
+// you might not be storing this correctly because you need to consider the
+// different data types like unsigned int and char and stuff
 static void store_four_bytes(uint32_t data, char *packet, int index)
 {
 	// Store the bytes (see if you can understand why this is working)
@@ -65,6 +68,7 @@ static void store_four_bytes(uint32_t data, char *packet, int index)
 	packet[index + 3] = data | packet[index + 3];
 }
 
+// same thing here as above
 static void store_two_bytes(uint16_t data, char *packet, int index)
 {
 	// Store the bytes (see if you can understand why this is working)
@@ -85,6 +89,8 @@ static void store_player_cards(char *cards, char *packet, int index)
 }
 
 // Stores the player's information in the datagram.
+// This isn't complete, refactor this and also you're only for the first 2ß
+// players
 static void store_player(struct player *p, char *packet, int index)
 {
 	// 1 because you stored the the whole connect request in the struct so
@@ -182,9 +188,10 @@ static void update_packet(struct black_jack *game, char *packet)
 	packet[11] = game->active_player;
 	store_dealer_cards(game->dealer_cards, packet);
 
+	char *username;
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
-		    0) {
+		username = game->players[i]->username;
+		if (strncasecmp(username, "", USERNAME_LEN) != 0) {
 			store_player(game->players[i], packet, i);
 		}
 	}
@@ -196,7 +203,7 @@ static void update_error_packet(char *packet, int status_code)
 	if (status_code == NO_MONEY) {
 		packet[0] = 6;
 		packet[1] = 1;
-		printf("YOU HAVE NO MORE MONEY TO PLAYER WITH, YOU LOSE!\n");
+		// printf("YOU HAVE NO MORE MONEY TO PLAY WITH, YOU LOSE!\n");
 	}
 }
 
@@ -213,29 +220,57 @@ static int is_username_valid(char username[])
 	return 0;
 }
 
+// Draws a card from the deck and adds it to the dealer or the player's hand (in
+// the struct black_jack * game)
+// Return: the card drawn
+static char draw(struct black_jack *game, int index)
+{
+	char card = draw_card(game->cards);
+	int position;
+	// printf("card in draw: %d\n", card);
+	// 10 is used to check if the dealer is a drawing a card or not
+	if (index == DEALER) {
+		position = strlen(game->dealer_cards);
+		game->dealer_cards[position] = card;
+	} else {
+		// Find out which position in the array to place the card in.
+		position = strlen(game->players[index]->cards);
+		// printf("position: %d\n", position);
+		game->players[index]->cards[position] = card;
+		// printf("game->players[index]->cards[position]: %d\n",
+		//        game->players[index]->cards[position]);
+	}
+
+	return card;
+}
+
 // Gets the username from the packet and stores in struct black_jack game
 static void add_player(struct black_jack *game, char packet[])
 {
 	int seat_count = 0;
 	// printf("packet: %s\n", packet);
+	char *username;
+	char card;
 
 	// Find an empty seat and add the player to it.
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
-		if (strncasecmp(game->players[i]->username, packet,
-				USERNAME_LEN) == 0) {
+		username = game->players[i]->username;
+		if (strncasecmp(username, packet, USERNAME_LEN) == 0) {
 			printf("%s\n",
 			       "Username is currently being "
 			       "used in the game, try a different user name");
 			break;
 		}
-		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) ==
-		    0) {
+		if (strncasecmp(username, "", USERNAME_LEN) == 0) {
 			// Add the player's username
-			strncpy(game->players[i]->username, packet,
-				USERNAME_LEN);
+			strncpy(username, packet, USERNAME_LEN);
 			// Add the player's bank
 			game->players[i]->bank = DEFAULT_BANK;
+			card = draw(game, i);
+			game->players[i]->hand_value += card_value(card);
+			card = draw(game, i);
+			game->players[i]->hand_value += card_value(card);
 			// game->players[i]->bet = MIN_BET;
 			if (game->active_player == 0) {
 				game->active_player = i + 1;
@@ -284,33 +319,6 @@ static void bet(struct black_jack *game, char packet[])
 	}
 }
 
-// Draws a card from the deck and adds it to the dealer or the player's hand (in
-// the struct black_jack * game)
-// Return: the card drawn
-static char draw(struct black_jack *game, int index)
-{
-	char card = draw_card(game->cards);
-	// printf("card in draw: %d\n", card);
-	// 10 is used to check if the dealer is a drawing a card or not
-	if (index == DEALER) {
-		for (int i = 0; i < MAX_CARDS; i++) {
-			if (game->dealer_cards[i] == 0) {
-				game->dealer_cards[i] = card;
-				break;
-			}
-		}
-	} else {
-		// Find out which position in the array to place the card in.
-		int position = strlen(game->players[index]->cards);
-		// printf("position: %d\n", position);
-		game->players[index]->cards[position] = card;
-		// printf("game->players[index]->cards[position]: %d\n",
-		//        game->players[index]->cards[position]);
-	}
-
-	return card;
-}
-
 static int hit(struct black_jack *game)
 {
 	char card;
@@ -345,6 +353,16 @@ static void stand(struct black_jack *game, char *packet)
 		game->dealer_hand_value += draw(game, DEALER);
 	}
 
+	int current_player = game->active_player - 1;
+
+	struct player *p = game->players[current_player];
+
+	printf("p->hand_value: %d\n", p->hand_value);
+	if (p->hand_value == BLACKJACK_VALUE) {
+		p->bank += p->bet * 1.5;
+	} else if (p->hand_value >= game->dealer_hand_value) {
+		p->bank += p->bet;
+	}
 }
 
 static int handle_packet(struct black_jack *game, char packet[])
@@ -437,6 +455,7 @@ static void init_game(struct black_jack *game)
 		memset(game->players[i]->cards, '\0', MAX_CARDS);
 		game->players[i]->bet = 0;
 		game->players[i]->bank = 0;
+		game->players[i]->hand_value = 0;
 	}
 }
 

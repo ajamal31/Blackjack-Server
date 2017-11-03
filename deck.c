@@ -38,7 +38,7 @@ char *make_deck(int num_of_decks)
 void print_deck(char *deck)
 {
 	for (int i = 0; i < strlen(deck); i++) {
-		printf("%d", deck[i]);
+		printf("%d ", deck[i]);
 	}
 }
 
