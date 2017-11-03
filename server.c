@@ -86,22 +86,20 @@ static void store_player_cards(char *cards, char *packet, int index)
 // Stores the player's information in the datagram.
 static void store_player(struct player *p, char *packet, int index)
 {
-	int character_tracker = 1; // 1 because you stored the the whole connect
-				   // request in the struct
+	// 1 because you stored the the whole connect request in the struct so
+	// ignore the first byte
+	int character_tracker = 1;
 	char *username = p->username;
 	if (index == 0) {
 		for (int i = 33; i < 33 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 45);
 		store_four_bytes(p->bet, packet, 49);
 		store_player_cards(p->cards, packet, 53);
-
 	} else if (index == 1) {
 		for (int i = 74; i < 74 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 86);
 		store_four_bytes(p->bet, packet, 90);
@@ -109,38 +107,28 @@ static void store_player(struct player *p, char *packet, int index)
 	} else if (index == 2) {
 		for (int i = 115; i < 115 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 127);
-
 	} else if (index == 3) {
 		for (int i = 156; i < 156 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 168);
-
 	} else if (index == 4) {
 		for (int i = 197; i < 197 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 209);
-
 	} else if (index == 5) {
 		for (int i = 238; i < 238 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 250);
-
 	} else if (index == 6) {
 		for (int i = 279; i < 279 + strlen(username); i++)
 			packet[i] = username[character_tracker++];
-
 		character_tracker = 1;
 		store_four_bytes(p->bank, packet, 291);
-
 	} else {
 		printf("%s\n", "INDEX OUT OF RANGE IN STORE_PLAYER!");
 	}
@@ -201,6 +189,7 @@ static void update_packet(struct black_jack *game, char *packet)
 	}
 }
 
+// Update the error datagram with the current status
 static void update_error_packet(char *packet, int status_code)
 {
 	if (status_code == NO_MONEY) {
@@ -223,6 +212,7 @@ static int is_username_valid(char username[])
 	return 0;
 }
 
+// Gets the username from the packet and stores in struct black_jack game
 static void add_player(struct black_jack *game, char packet[])
 {
 	int seat_count = 0;
@@ -231,7 +221,6 @@ static void add_player(struct black_jack *game, char packet[])
 	// Find an empty seat and add the player to it.
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
-
 		if (strncasecmp(game->players[i]->username, packet,
 				USERNAME_LEN) == 0) {
 			printf("%s\n",
@@ -239,22 +228,17 @@ static void add_player(struct black_jack *game, char packet[])
 			       "used in the game, try a different user name");
 			break;
 		}
-
 		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) ==
 		    0) {
 			// Add the player's username
 			strncpy(game->players[i]->username, packet,
 				USERNAME_LEN);
-
 			// Add the player's bank
 			game->players[i]->bank = DEFAULT_BANK;
-
 			// game->players[i]->bet = MIN_BET;
-
 			if (game->active_player == 0) {
 				game->active_player = i + 1;
 			}
-
 			break;
 		}
 	} // End of for loop
@@ -267,7 +251,7 @@ static void add_player(struct black_jack *game, char packet[])
 // Gets the bet that the player has entered in the client.
 static void bet(struct black_jack *game, char packet[])
 {
-	int bet_amount = 0;
+	uint32_t bet_amount = 0;
 
 	bet_amount = bet_amount | (unsigned char)packet[1];
 	// printf("packet[1]: %d\n", packet[1]);
@@ -285,7 +269,7 @@ static void bet(struct black_jack *game, char packet[])
 	// printf("packet[4]: %d\n", packet[4]);
 
 	int current_player = game->active_player - 1;
-	int current_bank = game->players[current_player]->bank;
+	uint32_t current_bank = game->players[current_player]->bank;
 
 	printf("current_bet: %d, current_bank: %d\n", bet_amount, current_bank);
 
@@ -299,6 +283,7 @@ static void bet(struct black_jack *game, char packet[])
 	}
 }
 
+// Draws a card from the deck and adds it to the dealer or the player's hand
 static char draw(struct black_jack *game, int index)
 {
 	char card = draw_card(game->cards);
@@ -349,10 +334,10 @@ static int hit(struct black_jack *game)
 
 static int handle_packet(struct black_jack *game, char packet[])
 {
-	printf("packet[1]: %d\n", (unsigned char) packet[1] );
-	printf("packet[2]: %d\n", (unsigned char) packet[2] );
-	printf("packet[3]: %d\n", (unsigned char) packet[3] );
-	printf("packet[4]: %d\n", (unsigned char) packet[4] );
+	// printf("packet[1]: %d\n", (unsigned char)packet[1]);
+	// printf("packet[2]: %d\n", (unsigned char)packet[2]);
+	// printf("packet[3]: %d\n", (unsigned char)packet[3]);
+	// printf("packet[4]: %d\n", (unsigned char)packet[4]);
 
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
@@ -437,7 +422,6 @@ static void init_game(struct black_jack *game)
 }
 
 // static void clear_game(struct black *game) {}
-
 
 void open_connection(int socketfd)
 {
@@ -532,8 +516,7 @@ void open_connection(int socketfd)
 			}
 
 			if (bytes_sent == -1) {
-				fprintf(stderr, "%s\n",
-					"bytes_send error");
+				fprintf(stderr, "%s\n", "bytes_send error");
 				continue;
 			}
 
