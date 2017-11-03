@@ -31,6 +31,7 @@
 #define DEFAULT_NUM_OF_DECKS 2
 #define DEALER 999
 #define NO_MONEY 61
+#define DEALER_TOTAL 16
 
 // Checks if memory allocation was a success or a fail
 static void mem_check(void *mem)
@@ -283,7 +284,9 @@ static void bet(struct black_jack *game, char packet[])
 	}
 }
 
-// Draws a card from the deck and adds it to the dealer or the player's hand
+// Draws a card from the deck and adds it to the dealer or the player's hand (in
+// the struct black_jack * game)
+// Return: the card drawn
 static char draw(struct black_jack *game, int index)
 {
 	char card = draw_card(game->cards);
@@ -332,6 +335,18 @@ static int hit(struct black_jack *game)
 	return 0;
 }
 
+static void stand(struct black_jack *game, char *packet)
+{
+	// Draw the "facedown" card;
+	game->dealer_hand_value += card_value(draw(game, DEALER));
+	printf("dealer_hand_value: %d\n", game->dealer_hand_value);
+
+	while (game->dealer_hand_value <= DEALER_TOTAL) {
+		game->dealer_hand_value += draw(game, DEALER);
+	}
+
+}
+
 static int handle_packet(struct black_jack *game, char packet[])
 {
 	// printf("packet[1]: %d\n", (unsigned char)packet[1]);
@@ -356,6 +371,7 @@ static int handle_packet(struct black_jack *game, char packet[])
 		printf("this is a bet request\n");
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
+		stand(game, packet);
 	} else if (packet[0] == 4) {
 		printf("this is a hit request\n");
 		return hit(game);
@@ -383,6 +399,7 @@ void print_game(struct black_jack game)
 	printf("min_bet: %d\n", game.min_bet);
 	printf("active_player: %d\n", game.active_player);
 	printf("dealer_cards: %s\n", game.dealer_cards);
+	printf("dealer_hand_value: %d\n", game.dealer_hand_value);
 	printf("cards: ");
 	print_deck(game.cards);
 	printf("\n");
@@ -403,12 +420,14 @@ static void init_game(struct black_jack *game)
 	game->min_bet = MIN_BET;
 	game->active_player = 0;
 	memset(game->dealer_cards, 0, MAX_CARDS);
+	game->dealer_hand_value = 0;
 
 	char *deck = make_deck(DEFAULT_NUM_OF_DECKS);
 	game->cards = deck;
 
 	// store the first card because on launch a card has to be there?
 	char card = draw(game, DEALER);
+	game->dealer_hand_value += card_value(card);
 	printf("card_value(%d): %d\n", card, card_value(card));
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {

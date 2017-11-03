@@ -19,6 +19,7 @@ struct black_jack {
         uint32_t min_bet;
         char active_player;
         char dealer_cards[21];
+        int dealer_hand_value;
         char * cards;
         struct player * players[7];
 };
