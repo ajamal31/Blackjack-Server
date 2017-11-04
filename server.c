@@ -295,48 +295,28 @@ static int next_player(struct black_jack *game, int current_player)
 	struct player *p;
 	// current_player += 1;
 	int i = current_player;
+	int next_player = 0;
 
-	// while (i < (NUMBER_OF_PLAYERS - 1)) {
-	// 	printf("i + 1: %d\n", i + 1 );
-	// 	p = game->players[i + 1];
-	// 	// If the next player is avaliable to bet, return their index
-	// 	if (strncasecmp(p->username, "", USERNAME_LEN) != 0) {
-	// 		return current_player + 1;
-	// 	}
-	//
-	// 	// start from the beginning again.
-	// 	if (i == 5) {
-	// 		printf("reached the end of the table \n");
-	// 		i = -1;
-	// 		// continue;
-	// 		// i = -1;
-	// 		// continue;
-	// 	}
-	// }
+	for (; i < NUMBER_OF_PLAYERS; i++) {
+		// printf("i + 1: %d\n", i + 1 );
+		if (i + 1 == NUMBER_OF_PLAYERS) {
+			printf("reached the end of the table\n");
+			i = -1;
+		}
 
-	for (; i < NUMBER_OF_PLAYERS - 1; i++) {
-		printf("i + 1: %d\n", i + 1 );
 		p = game->players[i + 1];
+
 		// If the next player is avaliable to bet, return their index
 		if (strncasecmp(p->username, "", USERNAME_LEN) != 0) {
-			return current_player + 1;
+			printf("player at %d\n", i + 1 );
+			next_player = i+1;
+			break;
+		} else {
+			printf("not player at %d\n", i + 1 );
 		}
-
-		// start from the beginning again.
-		if (i == 5) {
-			printf("reached the end of the table \n");
-			i = -1;
-			// continue;
-			// i = -1;
-			// continue;
-		}
-		// printf("next_player: %d\n", i);
 	}
 
-	// printf("next_player i: %d\n", i);
-	// return current_player;
-
-	// if ()
+	return next_player;
 }
 
 // Gets the bet that the player has entered in the client.
@@ -374,7 +354,8 @@ static void bet(struct black_jack *game, char packet[])
 		printf("you don't have enough money to bet\n");
 	}
 
-	game->active_player = next_player(game, current_player) + 1;
+	game->active_player = next_player(game, current_player) +1;
+	printf("bet, active_player: %d\n", game->active_player);
 }
 
 static void hit(struct black_jack *game)
