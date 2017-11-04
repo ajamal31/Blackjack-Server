@@ -245,7 +245,7 @@ static char draw(struct black_jack *game, int index)
 }
 
 // Gets the username from the packet and stores in struct black_jack game
-static void add_player(struct black_jack *game, char packet[])
+static int add_player(struct black_jack *game, char packet[])
 {
 	int seat_count = 0;
 	// printf("packet: %s\n", packet);
@@ -257,6 +257,10 @@ static void add_player(struct black_jack *game, char packet[])
 		seat_count++;
 		username = game->players[i]->username;
 		if (strncasecmp(username, packet, USERNAME_LEN) == 0) {
+
+			// if (game->players[i]->bank == 0) {
+			// 	return NO_MONEY;
+			// }
 			printf("%s\n",
 			       "Username is currently being "
 			       "used in the game, try a different user name");
@@ -282,6 +286,8 @@ static void add_player(struct black_jack *game, char packet[])
 	if (seat_count >= NUMBER_OF_PLAYERS) {
 		printf("%s\n", "Table is full. Sorry, no room for you.");
 	}
+
+	return 2000; // this needs to be changed
 }
 
 // Gets the bet that the player has entered in the client.
@@ -343,11 +349,22 @@ static int hit(struct black_jack *game)
 	return 0;
 }
 
+static int next_player(struct black_jack *game, int current_player)
+{
+	char *username;
+	int i = current_player + 1;
+	for (; i < NUMBER_OF_PLAYERS; i++) {
+		username = game->players[i]->username;
+		if (strncasecmp(username, "", USERNAME_LEN) != 0) {
+			return current_player + 1;
+		}
+	}
+}
+
 static void stand(struct black_jack *game, char *packet)
 {
 	// Draw the "facedown" card;
 	game->dealer_hand_value += card_value(draw(game, DEALER));
-	printf("dealer_hand_value: %d\n", game->dealer_hand_value);
 
 	while (game->dealer_hand_value <= DEALER_TOTAL) {
 		game->dealer_hand_value += draw(game, DEALER);
@@ -357,12 +374,34 @@ static void stand(struct black_jack *game, char *packet)
 
 	struct player *p = game->players[current_player];
 
-	printf("p->hand_value: %d\n", p->hand_value);
 	if (p->hand_value == BLACKJACK_VALUE) {
 		p->bank += p->bet * 1.5;
 	} else if (p->hand_value >= game->dealer_hand_value) {
 		p->bank += p->bet;
 	}
+
+	// Clear the dealer's hand
+	memset(game->dealer_cards, 0, 21);
+	game->dealer_hand_value = 0;
+
+	// Draw a card for the next hand (round).
+	char card = draw(game, DEALER);
+	game->dealer_hand_value += card_value(card);
+
+	// Clear the player's hand
+	memset(p->cards, 0, 21);
+	p->bet = 0;
+	p->hand_value = 0;
+
+	// Draw 2 more cards for the player
+	card = draw(game, current_player);
+	p->hand_value += card_value(card);
+	card = draw(game, current_player);
+	p->hand_value += card_value(card);
+
+	printf("next player: %d\n", next_player(game, current_player));
+
+	// game->active_player+=1;
 }
 
 static int handle_packet(struct black_jack *game, char packet[])
@@ -378,7 +417,7 @@ static int handle_packet(struct black_jack *game, char packet[])
 	if (packet[0] == 1) {
 		// printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
-			add_player(game, packet);
+			return add_player(game, packet);
 		} else {
 			printf("%s\n", "Invalid username; can only contain "
 				       "letters or digits and can't be longer "
@@ -474,7 +513,9 @@ void open_connection(int socketfd)
 
 	struct black_jack game;
 	struct sockaddr_storage their_addr;
-	socklen_t addr_len = sizeof(their_addr);
+	struct sockaddr_storage their_addrs[7];
+
+	socklen_t addr_len = sizeof(their_addrs[0]);
 	char *state_packet, *error_packet;
 	char buf[500];
 	int bytes_sent, bytes_read, bytes_ready, return_value;
