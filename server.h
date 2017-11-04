@@ -9,9 +9,10 @@
 #include <sys/socket.h>
 
 #define DEFAULT_PORT "4420"
-#define TEST_PORT                                                              \
-	"5629" // needs to be removed, especially after the command line
-	       // arguement
+
+// needs to be removed, especially after the command line
+#define TEST_PORT "5629"
+
 #define NUMBER_OF_PLAYERS 7
 #define USERNAME_LEN 13
 #define STATE_SIZE 320

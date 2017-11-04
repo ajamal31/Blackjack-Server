@@ -181,14 +181,14 @@ static void update_packet(struct black_jack *game, char *packet)
 }
 
 // Update the error datagram with the current status
-static void update_error_packet(char *packet, int status_code)
-{
-	if (status_code == NO_MONEY) {
-		packet[0] = 6;
-		packet[1] = 1;
-		// printf("YOU HAVE NO MORE MONEY TO PLAY WITH, YOU LOSE!\n");
-	}
-}
+// static void update_error_packet(char *packet, int status_code)
+// {
+// 	if (status_code == NO_MONEY) {
+// 		packet[0] = 6;
+// 		packet[1] = 1;
+// 		// printf("YOU HAVE NO MORE MONEY TO PLAY WITH, YOU LOSE!\n");
+// 	}
+// }
 
 static int is_username_valid(char username[])
 {
@@ -256,8 +256,8 @@ static void send_error_packet(struct black_jack *game,
 }
 
 // Gets the username from the packet and stores in struct black_jack game
-static int add_player(struct black_jack *game, char packet[],
-		      struct sockaddr_storage addr)
+static void add_player(struct black_jack *game, char packet[],
+		       struct sockaddr_storage addr)
 {
 	int seat_count = 0;
 	// printf("packet: %s\n", packet);
@@ -284,23 +284,59 @@ static int add_player(struct black_jack *game, char packet[],
 		}
 	} // End of for loop
 
+	// Table is full, send an error datagram to the client
 	if (seat_count > NUMBER_OF_PLAYERS) {
 		send_error_packet(game, addr, NO_ROOM);
 	}
-
-	return 2000; // this needs to be changed
 }
 
 static int next_player(struct black_jack *game, int current_player)
 {
 	struct player *p;
-	int i = current_player + 1;
-	for (; i < NUMBER_OF_PLAYERS; i++) {
-		p = game->players[i];
+	// current_player += 1;
+	int i = current_player;
+
+	// while (i < (NUMBER_OF_PLAYERS - 1)) {
+	// 	printf("i + 1: %d\n", i + 1 );
+	// 	p = game->players[i + 1];
+	// 	// If the next player is avaliable to bet, return their index
+	// 	if (strncasecmp(p->username, "", USERNAME_LEN) != 0) {
+	// 		return current_player + 1;
+	// 	}
+	//
+	// 	// start from the beginning again.
+	// 	if (i == 5) {
+	// 		printf("reached the end of the table \n");
+	// 		i = -1;
+	// 		// continue;
+	// 		// i = -1;
+	// 		// continue;
+	// 	}
+	// }
+
+	for (; i < NUMBER_OF_PLAYERS - 1; i++) {
+		printf("i + 1: %d\n", i + 1 );
+		p = game->players[i + 1];
+		// If the next player is avaliable to bet, return their index
 		if (strncasecmp(p->username, "", USERNAME_LEN) != 0) {
 			return current_player + 1;
 		}
+
+		// start from the beginning again.
+		if (i == 5) {
+			printf("reached the end of the table \n");
+			i = -1;
+			// continue;
+			// i = -1;
+			// continue;
+		}
+		// printf("next_player: %d\n", i);
 	}
+
+	// printf("next_player i: %d\n", i);
+	// return current_player;
+
+	// if ()
 }
 
 // Gets the bet that the player has entered in the client.
@@ -322,7 +358,8 @@ static void bet(struct black_jack *game, char packet[])
 	int current_player = game->active_player - 1;
 	uint32_t current_bank = game->players[current_player]->bank;
 
-	printf("current_bet: %d, current_bank: %d\n", bet_amount, current_bank);
+	// printf("current_bet: %d, current_bank: %d\n", bet_amount,
+	// current_bank);
 
 	// If the player has enough money in the bank account place their bet
 	// and give them 2 cards
@@ -332,11 +369,12 @@ static void bet(struct black_jack *game, char packet[])
 		game->players[current_player]->hand_value += card_value(card);
 		card = draw(game, current_player);
 		game->players[current_player]->hand_value += card_value(card);
+		// game->active_player = next_player(game, current_player) + 1;
 	} else {
 		printf("you don't have enough money to bet\n");
 	}
 
-	// game->active_player = next_player(game, current_player);
+	game->active_player = next_player(game, current_player) + 1;
 }
 
 static void hit(struct black_jack *game)
@@ -381,7 +419,7 @@ static void stand(struct black_jack *game, char *packet)
 	}
 
 	// Clear the dealer's hand
-	memset(game->dealer_cards, 0, 21);
+	memset(game->dealer_cards, 0, MAX_CARDS);
 	game->dealer_hand_value = 0;
 
 	// Draw a card for the next hand (round).
@@ -398,8 +436,10 @@ static void stand(struct black_jack *game, char *packet)
 	game->active_player = next_player(game, current_player) + 1;
 }
 
-static int handle_packet(struct black_jack *game, char packet[],
-			 struct sockaddr_storage addr)
+static void quit(struct black_jack *game, char *packet) {}
+
+static void handle_packet(struct black_jack *game, char packet[],
+			  struct sockaddr_storage addr)
 {
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
@@ -407,15 +447,15 @@ static int handle_packet(struct black_jack *game, char packet[],
 	if (packet[0] == 1) {
 		// printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
-			return add_player(game, packet, addr);
+			add_player(game, packet, addr);
 		} else {
 			printf("%s\n", "Invalid username; can only contain "
 				       "letters or digits and can't be longer "
 				       "than 12 characters");
 		}
 	} else if (packet[0] == 2) {
-		bet(game, packet);
 		printf("this is a bet request\n");
+		bet(game, packet);
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
 		stand(game, packet);
@@ -424,6 +464,8 @@ static int handle_packet(struct black_jack *game, char packet[],
 		hit(game);
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
+		printf("quit packet: ");
+		print_packet(packet);
 	} else if (packet[0] == 6) {
 		printf("this is an error request\n");
 	} else if (packet[0] == 7) {
@@ -432,10 +474,7 @@ static int handle_packet(struct black_jack *game, char packet[],
 		printf("this is an ack request\n");
 	} else {
 		printf("this is not a valid request\n");
-		return 10000; // REMOVE THIS AFTER! THIS IS BAD!
 	}
-
-	return 1000; // remove this too!
 }
 
 void print_game(struct black_jack game)
@@ -512,7 +551,7 @@ void open_connection(int socketfd)
 	socklen_t addr_len = sizeof(their_addr);
 	char *state_packet;
 	char buf[500];
-	int bytes_sent, bytes_read, bytes_ready, return_value;
+	int bytes_sent, bytes_read, bytes_ready;
 
 	// Initialize the game board
 	init_game(&game, socketfd);
@@ -559,8 +598,9 @@ void open_connection(int socketfd)
 				continue;
 			}
 
-			return_value = handle_packet(&game, buf, their_addr);
-			printf("return_value: %d\n", return_value);
+			// MAKE handle_packet A VOID FUNCTION BECAUSE YOU
+			// PROBABLY DON'T THE RETURN VALUE FROM THIS.
+			handle_packet(&game, buf, their_addr);
 
 			update_packet(&game, state_packet);
 
@@ -574,6 +614,7 @@ void open_connection(int socketfd)
 					continue;
 				}
 			}
+			printf("\n");
 
 		} // End of if statement
 
