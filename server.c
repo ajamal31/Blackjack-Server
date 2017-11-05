@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -279,6 +280,9 @@ static void add_player(struct black_jack *game, char packet[],
 			game->players[i]->address = addr;
 			if (game->active_player == 0) {
 				game->active_player = i + 1;
+				game->players[i]->in_queue = false;
+			} else {
+				game->players[i]->in_queue = true;
 			}
 			break;
 		}
@@ -290,7 +294,7 @@ static void add_player(struct black_jack *game, char packet[],
 	}
 }
 
-static int next_player(struct black_jack *game, int current_player)
+static int find_next_player(struct black_jack *game, int current_player)
 {
 	struct player *p;
 	// current_player += 1;
@@ -300,19 +304,20 @@ static int next_player(struct black_jack *game, int current_player)
 	for (; i < NUMBER_OF_PLAYERS; i++) {
 		// printf("i + 1: %d\n", i + 1 );
 		if (i + 1 == NUMBER_OF_PLAYERS) {
-			printf("reached the end of the table\n");
+			// printf("reached the end of the table\n");
 			i = -1;
 		}
 
 		p = game->players[i + 1];
 
 		// If the next player is avaliable to bet, return their index
-		if (strncasecmp(p->username, "", USERNAME_LEN) != 0) {
-			printf("player at %d\n", i + 1 );
-			next_player = i+1;
+		if (strncasecmp(p->username, "",
+				USERNAME_LEN != 0 && p->in_queue == false)) {
+			printf("player at %d\n", i + 1);
+			next_player = i + 1;
 			break;
 		} else {
-			printf("not player at %d\n", i + 1 );
+			// printf("not player at %d\n", i + 1);
 		}
 	}
 
@@ -345,79 +350,109 @@ static void bet(struct black_jack *game, char packet[])
 	// and give them 2 cards
 	if (current_bank >= bet_amount) {
 		game->players[current_player]->bet = bet_amount;
+		game->players[current_player]->bank -= bet_amount;
 		char card = draw(game, current_player);
 		game->players[current_player]->hand_value += card_value(card);
 		card = draw(game, current_player);
 		game->players[current_player]->hand_value += card_value(card);
-		// game->active_player = next_player(game, current_player) + 1;
+		game->active_player =
+		    find_next_player(game, current_player) + 1;
 	} else {
 		printf("you don't have enough money to bet\n");
 	}
 
-	game->active_player = next_player(game, current_player) +1;
-	printf("bet, active_player: %d\n", game->active_player);
+	// game->active_player = find_next_player(game, current_player) + 1;
+	// printf("bet, active_player: %d\n", game->active_player);
 }
 
 static void hit(struct black_jack *game)
 {
 	char card;
-	int active_player = (game->active_player) - 1;
-	struct player *p = game->players[active_player];
+	int current_player = (game->active_player) - 1;
+	struct player *p = game->players[current_player];
 
-	card = draw(game, active_player);
+	card = draw(game, current_player);
 	p->hand_value += card_value(card);
 
-	printf("players: %d's hand_value: %d\n", active_player, p->hand_value);
+	printf("players: %d's hand_value: %d\n", current_player, p->hand_value);
 
+	// The player lost that round so take the money out of the player's bank
+	// and reset their player
 	if (p->hand_value > 21) {
-		p->bank -= p->bet;
 		p->bet = 0;
+		game->active_player =
+		    find_next_player(game, current_player) + 1;
 	}
 
+	// The player is out of money, they're done
 	if (p->bank == 0) {
 		send_error_packet(game, p->address, NO_MONEY);
 		memset(p, 0, sizeof(struct player));
 	}
 }
 
-static void stand(struct black_jack *game, char *packet)
+static void update_players(struct black_jack *game)
 {
-	// Draw the "facedown" card;
-	game->dealer_hand_value += card_value(draw(game, DEALER));
+	// Set all the current players' queue status to false
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		struct player *p = game->players[i];
+		printf("p->hand_value: %d, game->dealer_hand_value: %d\n",
+		       p->hand_value, game->dealer_hand_value);
 
-	while (game->dealer_hand_value <= DEALER_TOTAL) {
-		game->dealer_hand_value += draw(game, DEALER);
+		if (p->hand_value == BLACKJACK_VALUE) {
+			p->bank += p->bet * 2.5;
+		} else if (p->hand_value > game->dealer_hand_value) {
+			p->bank += p->bet * 2;
+		}
+		else if (p->hand_value == game->dealer_hand_value) {
+			p->bank += p->bet;
+		}
+
+		// Reset the player's hand
+		p->hand_value = 0;
+		memset(p->cards, 0, MAX_CARDS);
+		p->bet = 0;
+
+		char *username = game->players[i]->username;
+		if (strncasecmp(username, "", USERNAME_LEN) != 0) {
+			game->players[i]->in_queue = false;
+		}
 	}
-
-	int current_player = game->active_player - 1;
-
-	struct player *p = game->players[current_player];
-
-	if (p->hand_value == BLACKJACK_VALUE) {
-		p->bank += p->bet * 1.5;
-	} else if (p->hand_value >= game->dealer_hand_value) {
-		p->bank += p->bet;
-	}
-
-	// Clear the dealer's hand
-	memset(game->dealer_cards, 0, MAX_CARDS);
-	game->dealer_hand_value = 0;
-
-	// Draw a card for the next hand (round).
-	char card = draw(game, DEALER);
-	game->dealer_hand_value += card_value(card);
-
-	// Clear the player's hand
-	memset(p->cards, 0, 21);
-	p->bet = 0;
-	p->hand_value = 0;
-
-	printf("next player: %d\n", next_player(game, current_player));
-
-	game->active_player = next_player(game, current_player) + 1;
 }
 
-static void quit(struct black_jack *game, char *packet) {}
+static void stand(struct black_jack *game, char *packet)
+{
+	int current_player = game->active_player - 1;
+	int next_player = find_next_player(game, current_player);
+	char card;
+
+	// If the round isn't over
+	if (next_player != 0) {
+		game->active_player =
+		    find_next_player(game, current_player) + 1;
+	} else {
+		// The dealer reveals the "facedown" card.
+		card = draw(game, DEALER);
+		game->dealer_hand_value += card_value(card);
+
+		while (game->dealer_hand_value <= DEALER_TOTAL) {
+			card = draw(game, DEALER);
+			game->dealer_hand_value += card_value(card);
+		}
+
+		update_players(game);
+
+		// reset the player sequence.
+		game->active_player = 1;
+		game->dealer_hand_value = 0;
+		memset(game->dealer_cards, 0, MAX_CARDS);
+
+		card = draw(game, DEALER);
+		game->dealer_hand_value += card_value(card);
+	}
+}
+
+// static void quit(struct black_jack *game, char *packet) {}
 
 static void handle_packet(struct black_jack *game, char packet[],
 			  struct sockaddr_storage addr)
@@ -445,8 +480,8 @@ static void handle_packet(struct black_jack *game, char packet[],
 		hit(game);
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
-		printf("quit packet: ");
-		print_packet(packet);
+		// printf("quit packet: ");
+		// print_packet(packet);
 	} else if (packet[0] == 6) {
 		printf("this is an error request\n");
 	} else if (packet[0] == 7) {
@@ -467,14 +502,17 @@ void print_game(struct black_jack game)
 	printf("active_player: %d\n", game.active_player);
 	printf("dealer_cards: %s\n", game.dealer_cards);
 	printf("dealer_hand_value: %d\n", game.dealer_hand_value);
-	printf("cards: ");
-	print_deck(game.cards);
+	printf("round_status: %d\n", game.round_status);
+	// printf("cards: ");
+	// print_deck(game.cards);
 	printf("\n");
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		printf("player %d = username:%s cards:%s bet:%d bank:%d\n", i,
-		       game.players[i]->username, game.players[i]->cards,
-		       game.players[i]->bet, game.players[i]->bank);
+		printf("player %d = username:%s cards:%s bet:%d bank:%d "
+		       "in_queue: %d\n",
+		       i, game.players[i]->username, game.players[i]->cards,
+		       game.players[i]->bet, game.players[i]->bank,
+		       game.players[i]->in_queue);
 	}
 }
 
@@ -510,6 +548,7 @@ static void init_game(struct black_jack *game, int socketfd)
 		memset(&(game->players[i]->address), 0,
 		       sizeof(struct sockaddr_storage));
 		game->players[i]->address_len = sizeof(struct sockaddr_storage);
+		game->players[i]->in_queue = false;
 	}
 }
 
@@ -579,11 +618,12 @@ void open_connection(int socketfd)
 				continue;
 			}
 
-			// MAKE handle_packet A VOID FUNCTION BECAUSE YOU
-			// PROBABLY DON'T THE RETURN VALUE FROM THIS.
 			handle_packet(&game, buf, their_addr);
 
 			update_packet(&game, state_packet);
+			printf("Struct after:\n");
+			print_game(game);
+			printf("\n");
 
 			for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 				their_addr = game.players[i]->address;
@@ -591,7 +631,7 @@ void open_connection(int socketfd)
 				    socketfd, state_packet, STATE_SIZE, 0,
 				    (struct sockaddr *)&their_addr, addr_len);
 				if (bytes_sent == -1) {
-					perror("bytes_sent");
+					// perror("bytes_sent");
 					continue;
 				}
 			}

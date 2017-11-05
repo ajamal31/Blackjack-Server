@@ -6,6 +6,7 @@
 #define SERVER_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/socket.h>
 
 #define DEFAULT_PORT "4420"
@@ -25,7 +26,7 @@
 #define DEALER_TOTAL 16
 #define BLACKJACK_VALUE 21
 #define NEW_ROUND 0
-#define BETS_PLACED TRUE
+#define BETS_PLACED true
 
 #define NO_MONEY 1
 #define NO_ROOM 2
@@ -39,6 +40,7 @@ struct player {
 	int hand_value;
 	struct sockaddr_storage address;
 	socklen_t address_len;
+	int in_queue;
 };
 
 struct black_jack {
