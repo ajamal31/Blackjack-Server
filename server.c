@@ -256,6 +256,7 @@ static void add_player(struct black_jack *game, char packet[],
 			// Add the player's bank
 			game->players[i]->bank = DEFAULT_BANK;
 			game->players[i]->address = addr;
+			game->players[i]->address_len = sizeof(addr);
 			if (game->active_player == 0) {
 				game->active_player = i + 1;
 				game->players[i]->in_queue = false;
@@ -465,7 +466,36 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 	send_packet(game, state_packet);
 }
 
-// static void quit(struct black_jack *game, char *packet) {}
+static void quit(struct black_jack *game, struct sockaddr_storage addr, char * packet)
+{
+	// https://stackoverflow.com/questions/12810587/extracting-ip-address-and-port-info-from-sockaddr-storage
+	// https://msdn.microsoft.com/en-us/library/zx63b042.aspx
+	struct sockaddr_in *sin = (struct sockaddr_in *)&addr;
+	unsigned char *ip = (unsigned char *)&sin->sin_addr.s_addr;
+	unsigned short sin_port = sin->sin_port;
+	printf("sin_port %d\n", sin_port);
+
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		struct sockaddr_in *sin2 =
+		    (struct sockaddr_in *)&(game->players[i]->address);
+		unsigned char *ip2 = (unsigned char *)&sin2->sin_addr.s_addr;
+		unsigned short sin_port2 = sin2->sin_port;
+
+		if (ip[0] == ip2[0] && ip[0] == ip2[0] && ip[0] == ip2[0] &&
+		    ip[0] == ip2[0] && sin_port == sin_port2) {
+			memset(game->players[i], 0, sizeof(struct player));
+			game->active_player = find_next_player(game, i);
+			game->players[game->active_player -1 ]->in_queue = false;
+			// printf("%s quit the game\n",
+			//        game->players[i]->username);
+		}
+	}
+
+	send_packet(game, packet);
+
+	// printf("%d %d %d %d\n", ip[0], ip[1], ip[2], ip[3]);
+	// printf("addr: %s\n", addr);
+}
 
 static void handle_packet(struct black_jack *game, char packet[],
 			  struct sockaddr_storage addr, char *state_packet)
@@ -493,6 +523,7 @@ static void handle_packet(struct black_jack *game, char packet[],
 		hit(game, state_packet);
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
+		quit(game, addr, state_packet);
 		// printf("quit packet: ");
 		// print_packet(packet);
 	} else if (packet[0] == 6) {
@@ -584,7 +615,7 @@ void open_connection(int socketfd)
 	socklen_t addr_len = sizeof(their_addr);
 	char *state_packet;
 	char buf[500];
-	int bytes_sent, bytes_read, bytes_ready;
+	int bytes_read, bytes_ready;
 
 	// Initialize the game board
 	init_game(&game, socketfd);
@@ -645,21 +676,21 @@ void open_connection(int socketfd)
 		} // End of if statement
 
 		if (bytes_ready == 0) {
-			printf("%s\n", "timed out");
-			memset(buf, '\0', 500);
-
-			bytes_read =
-			    recvfrom(socketfd, buf, 500, 0,
-				     (struct sockaddr *)&their_addr, &addr_len);
-
-			if (bytes_read == -1) {
-				fprintf(stderr, "%s\n",
-					"server: error reading from socket");
-				continue;
-			}
-			printf("timeout buf: ");
-			print_packet(buf);
-			send_error_packet(&game, their_addr, 5);
+			// printf("%s\n", "timed out");
+			// memset(buf, '\0', 500);
+			//
+			// bytes_read =
+			//     recvfrom(socketfd, buf, 500, 0,
+			// 	     (struct sockaddr *)&their_addr, &addr_len);
+			//
+			// if (bytes_read == -1) {
+			// 	fprintf(stderr, "%s\n",
+			// 		"server: error reading from socket");
+			// 	continue;
+			// }
+			// printf("timeout buf: ");
+			// print_packet(buf);
+			// send_error_packet(&game, their_addr, 5);
 		}
 
 	} // End of while loop
