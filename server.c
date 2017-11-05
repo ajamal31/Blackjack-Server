@@ -466,7 +466,8 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 	send_packet(game, state_packet);
 }
 
-static void quit(struct black_jack *game, struct sockaddr_storage addr, char * packet)
+static void quit(struct black_jack *game, struct sockaddr_storage addr,
+		 char *packet)
 {
 	// https://stackoverflow.com/questions/12810587/extracting-ip-address-and-port-info-from-sockaddr-storage
 	// https://msdn.microsoft.com/en-us/library/zx63b042.aspx
@@ -474,6 +475,7 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr, char * p
 	unsigned char *ip = (unsigned char *)&sin->sin_addr.s_addr;
 	unsigned short sin_port = sin->sin_port;
 	printf("sin_port %d\n", sin_port);
+	int current_player = game->active_player -1;
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		struct sockaddr_in *sin2 =
@@ -484,12 +486,23 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr, char * p
 		if (ip[0] == ip2[0] && ip[0] == ip2[0] && ip[0] == ip2[0] &&
 		    ip[0] == ip2[0] && sin_port == sin_port2) {
 			memset(game->players[i], 0, sizeof(struct player));
-			game->active_player = find_next_player(game, i);
-			game->players[game->active_player -1 ]->in_queue = false;
-			// printf("%s quit the game\n",
+			// current_player = game->active_player;
+			// game->active_player = find_next_player(game, i);
+			// game->players[game->active_player -1 ]->in_queue =
+			// false; printf("%s quit the game\n",
 			//        game->players[i]->username);
 		}
 	}
+
+	//
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
+		    0) {
+			game->players[i]->in_queue = false;
+		}
+	}
+
+	game->active_player = find_next_player(game, current_player) +1;
 
 	send_packet(game, packet);
 
