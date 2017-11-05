@@ -75,7 +75,7 @@ static void store_player_cards(char *cards, char *packet, int index)
 // Stores the player's information in the datagram.
 // This isn't complete, refactor this and also you're only for the first 2ß
 // players
-static void store_player(struct player *p, char *packet, int index)
+static void store_player(struct Player *p, char *packet, int index)
 {
 	// 1 because you stored the the whole connect request in the struct so
 	// ignore the first byte
@@ -126,7 +126,7 @@ static char *make_packet(char *type)
 
 // This function updates the datagram with the current state of the game into
 // bytes (datagram/packet)
-static void update_packet(struct black_jack *game, char *packet)
+static void update_packet(struct BlackJack *game, char *packet)
 {
 	memset(packet, 0, 320);
 
@@ -161,9 +161,9 @@ static int is_username_valid(char username[])
 }
 
 // Draws a card from the deck and adds it to the dealer or the player's hand (in
-// the struct black_jack * game)
+// the struct BlackJack * game)
 // Return: the card drawn
-static char draw(struct black_jack *game, int index)
+static char draw(struct BlackJack *game, int index)
 {
 	char card = draw_card(game->cards);
 	int position;
@@ -184,7 +184,7 @@ static char draw(struct black_jack *game, int index)
 	return card;
 }
 
-static void send_error_packet(struct black_jack *game,
+static void send_error_packet(struct BlackJack *game,
 			      struct sockaddr_storage addr, int error_type)
 {
 	int socketfd = game->socketfd;
@@ -212,7 +212,7 @@ static void send_error_packet(struct black_jack *game,
 	free(error_packet);
 }
 
-static void send_packet(struct black_jack *game, char *state_packet)
+static void send_packet(struct BlackJack *game, char *state_packet)
 {
 	// game->seq_num+=1;
 	update_packet(game, state_packet);
@@ -234,8 +234,44 @@ static void send_packet(struct black_jack *game, char *state_packet)
 	}
 }
 
-// Gets the username from the packet and stores in struct black_jack game
-static void add_player(struct black_jack *game, char packet[],
+static struct History *create_node(struct Player *player)
+{
+	struct History *history = malloc(sizeof(struct History));
+	memset(history, 0, sizeof(struct History));
+	history->player = player;
+	history->next = NULL;
+
+	printf("history->player.username: %s\n", history->player->username);
+	return history;
+}
+
+static void print_history(struct BlackJack *game)
+{
+	printf("History: \n");
+	struct History *cur = game->history;
+	while (cur != NULL) {
+		printf("player: %s, bank: %d\n", cur->player->username, cur->player->bank);
+		cur = cur->next;
+	}
+}
+
+static void add_history(struct BlackJack *game, struct History *history)
+{
+
+	struct History *cur = game->history;
+	if (cur == NULL) {
+		game->history = history;
+		return;
+	}
+
+	while (cur->next != NULL) {
+		cur = cur->next;
+	}
+	cur->next = history;
+}
+
+// Gets the username from the packet and stores in struct BlackJack game
+static void add_player(struct BlackJack *game, char packet[],
 		       struct sockaddr_storage addr, char *state_packet)
 {
 	int seat_count = 0;
@@ -250,6 +286,8 @@ static void add_player(struct black_jack *game, char packet[],
 			send_error_packet(game, addr, USERNAME_TAKEN);
 			break;
 		}
+		// Add the player to the seat if there's an empty seat and add
+		// them to the history linked list
 		if (strncasecmp(username, "", USERNAME_LEN) == 0) {
 			// Add the player's username
 			strncpy(username, packet, USERNAME_LEN);
@@ -263,6 +301,11 @@ static void add_player(struct black_jack *game, char packet[],
 			} else {
 				game->players[i]->in_queue = true;
 			}
+
+			struct History *history = create_node(game->players[i]);
+			add_history(game, history);
+			print_history(game);
+
 			// update_packet(game, state_packet);
 			send_packet(game, state_packet);
 			break;
@@ -275,9 +318,9 @@ static void add_player(struct black_jack *game, char packet[],
 	}
 }
 
-static int find_next_player(struct black_jack *game, int current_player)
+static int find_next_player(struct BlackJack *game, int current_player)
 {
-	struct player *p;
+	struct Player *p;
 	// current_player += 1;
 	int i = current_player;
 	int next_player = 0;
@@ -305,7 +348,7 @@ static int find_next_player(struct black_jack *game, int current_player)
 }
 
 // Gets the bet that the player has entered in the client.
-static void bet(struct black_jack *game, char packet[], char *state_packet)
+static void bet(struct BlackJack *game, char packet[], char *state_packet)
 {
 	uint32_t bet_amount = 0;
 
@@ -348,11 +391,11 @@ static void bet(struct black_jack *game, char packet[], char *state_packet)
 	// printf("bet, active_player: %d\n", game->active_player);
 }
 
-static void hit(struct black_jack *game, char *state_packet)
+static void hit(struct BlackJack *game, char *state_packet)
 {
 	char card;
 	int current_player = (game->active_player) - 1;
-	struct player *p = game->players[current_player];
+	struct Player *p = game->players[current_player];
 
 	card = draw(game, current_player);
 	p->hand_value += card_value(card);
@@ -370,18 +413,18 @@ static void hit(struct black_jack *game, char *state_packet)
 	// The player is out of money, they're done
 	if (p->bank == 0) {
 		send_error_packet(game, p->address, NO_MONEY);
-		memset(p, 0, sizeof(struct player));
+		memset(p, 0, sizeof(struct Player));
 	} else {
 		// update_packet(game, state_packet);
 		send_packet(game, state_packet);
 	}
 }
 
-static void update_players(struct black_jack *game)
+static void update_players(struct BlackJack *game)
 {
 	// Set all the current players' queue status to false
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		struct player *p = game->players[i];
+		struct Player *p = game->players[i];
 		printf("p->hand_value: %d, game->dealer_hand_value: %d\n",
 		       p->hand_value, game->dealer_hand_value);
 
@@ -406,7 +449,7 @@ static void update_players(struct black_jack *game)
 	// game->active_player = find_next_player(game, game->active_player) +1;
 }
 
-static void stand(struct black_jack *game, char *packet, char *state_packet)
+static void stand(struct BlackJack *game, char *packet, char *state_packet)
 {
 	int current_player = game->active_player - 1;
 	int next_player = find_next_player(game, current_player);
@@ -416,14 +459,11 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 
 	// If the round isn't over
 	if (next_player != 0) {
-		game->active_player = find_next_player(game, current_player) + 1;
+		game->active_player =
+		    find_next_player(game, current_player) + 1;
 		send_packet(game, state_packet);
-		//     update_packet(game, state_packet);
-		// printf("state in stand during round:\n");
-		// print_game(*game);
-		// printf("\n");
-		// send_packet(game, state_packet);
-	// no more players so round's over
+
+		// no more players so round's over
 	} else if (next_player == 0) {
 
 		game->active_player = 0;
@@ -433,49 +473,32 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 		game->dealer_hand_value += card_value(card);
 		send_packet(game, state_packet);
 		sleep(1);
-		// game->active_player =0 ;
-		//
-		// // Send the packets after the dealer reveals the face down card
-		// // and then wait 1 second
-		// // update_packet(game, state_packet);
-		//
-		// // sleep(1);
-		// send_packet(game, state_packet);
-		// // sleep(1);
-		//
-		// // Dealer draws the cards and after drawing each card the dealer
+		// // Dealer draws the cards and after drawing each card the
+		// dealer
 		// // waits for 1 second then draws another card.
 		while (game->dealer_hand_value <= DEALER_TOTAL) {
-			// printf("dealer's hand value: %d\n", game->dealer_hand_value );
+			// printf("dealer's hand value: %d\n",
+			// game->dealer_hand_value );
 			card = draw(game, DEALER);
 			game->dealer_hand_value += card_value(card);
 			send_packet(game, state_packet);
 			sleep(1);
-			// update_packet(game, state_packet);
-			// send_packet(game, state_packet);
-			// sleep(1);
 		}
 
 		sleep(1);
-		//
-		// // Count up all the winnings, losings, ties.. etc of the players
+
+		// // Count up all the winnings, losings, ties.. etc of the
+		// players
 		// // and update their balances
 		update_players(game);
 
 		send_packet(game, state_packet);
 
 		game->active_player = find_next_player(game, -1) + 1;
-		printf("active player in stand: %d\n", game->active_player );
+		printf("active player in stand: %d\n", game->active_player);
 		game->dealer_hand_value = 0;
 		memset(game->dealer_cards, 0, MAX_CARDS);
 		send_packet(game, state_packet);
-
-		// // reset the player sequence.
-		// // game->active_player = 1;
-		// game->dealer_hand_value = 0;
-		// memset(game->dealer_cards, 0, MAX_CARDS);
-		// // send_packet(game, state_packet);
-		//
 		sleep(1);
 		//
 		card = draw(game, DEALER);
@@ -486,7 +509,7 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 	// send_packet(game, state_packet);
 }
 
-static void quit(struct black_jack *game, struct sockaddr_storage addr,
+static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 		 char *packet)
 {
 	// https://stackoverflow.com/questions/12810587/extracting-ip-address-and-port-info-from-sockaddr-storage
@@ -505,7 +528,7 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr,
 
 		if (ip[0] == ip2[0] && ip[0] == ip2[0] && ip[0] == ip2[0] &&
 		    ip[0] == ip2[0] && sin_port == sin_port2) {
-			memset(game->players[i], 0, sizeof(struct player));
+			memset(game->players[i], 0, sizeof(struct Player));
 			// current_player = game->active_player;
 			// game->active_player = find_next_player(game, i);
 			// game->players[game->active_player -1 ]->in_queue =
@@ -522,7 +545,8 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr,
 		}
 	}
 
-	game->active_player = find_next_player(game, current_player) + 1;
+	// THIS IS PROBABLY NOT RIGHT SO YOU'LL NEED A DIFFERENT SOLUTION.
+	game->active_player = 0;
 
 	send_packet(game, packet);
 
@@ -530,7 +554,7 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr,
 	// printf("addr: %s\n", addr);
 }
 
-static void handle_packet(struct black_jack *game, char packet[],
+static void handle_packet(struct BlackJack *game, char packet[],
 			  struct sockaddr_storage addr, char *state_packet)
 {
 	// Everytime a packet is received, this needs to be updated.
@@ -556,7 +580,7 @@ static void handle_packet(struct black_jack *game, char packet[],
 		hit(game, state_packet);
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
-		// quit(game, addr, state_packet);
+		quit(game, addr, state_packet);
 		// printf("quit packet: ");
 		// print_packet(packet);
 	} else if (packet[0] == 6) {
@@ -570,7 +594,7 @@ static void handle_packet(struct black_jack *game, char packet[],
 	}
 }
 
-void print_game(struct black_jack game)
+void print_game(struct BlackJack game)
 {
 	printf("op_code: %d\n", game.op_code);
 	printf("response_arg: %d\n", game.response_arg);
@@ -594,7 +618,7 @@ void print_game(struct black_jack game)
 }
 
 // Make sure you write a free function for this
-static void init_game(struct black_jack *game, int socketfd)
+static void init_game(struct BlackJack *game, int socketfd)
 {
 	game->socketfd = socketfd;
 	game->op_code = 0;
@@ -605,6 +629,7 @@ static void init_game(struct black_jack *game, int socketfd)
 	game->round_status = NEW_ROUND;
 	memset(game->dealer_cards, 0, MAX_CARDS);
 	game->dealer_hand_value = 0;
+	game->history = NULL;
 
 	char *deck = make_deck(DEFAULT_NUM_OF_DECKS);
 	game->cards = deck;
@@ -615,7 +640,7 @@ static void init_game(struct black_jack *game, int socketfd)
 	printf("card_value(%d): %d\n", card, card_value(card));
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		game->players[i] = malloc(sizeof(struct player));
+		game->players[i] = malloc(sizeof(struct Player));
 		mem_check(game->players[i]);
 		memset(game->players[i]->username, '\0', USERNAME_LEN);
 		memset(game->players[i]->cards, '\0', MAX_CARDS);
@@ -642,7 +667,7 @@ void open_connection(int socketfd)
 	// Adds socketfd to main_readfds pointer
 	FD_SET(socketfd, &main_readfds);
 
-	struct black_jack game;
+	struct BlackJack game;
 	struct sockaddr_storage their_addr;
 
 	socklen_t addr_len = sizeof(their_addr);

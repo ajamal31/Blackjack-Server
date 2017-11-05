@@ -32,7 +32,7 @@
 #define NO_ROOM 2
 #define USERNAME_TAKEN 3
 
-struct player {
+struct Player {
 	char username[13];
 	char cards[21];
 	uint32_t bet;
@@ -43,7 +43,7 @@ struct player {
 	int in_queue;
 };
 
-struct black_jack {
+struct BlackJack {
 	int socketfd;
 	char op_code;
 	uint32_t response_arg;
@@ -54,14 +54,20 @@ struct black_jack {
 	int dealer_hand_value;
 	int round_status;
 	char *cards;
-	struct player *players[7];
+	struct Player *players[7];
+	struct History * history;
+};
+
+struct History {
+	struct Player *player;
+	struct History * next;
 };
 
 int get_socket(char *port);
 
 void open_connection(int socketfd);
 
-void print_game(struct black_jack);
+void print_game(struct BlackJack);
 
 char *make_deck(int deck_size);
 
