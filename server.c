@@ -89,7 +89,6 @@ static void store_player(struct player *p, char *packet, int index)
 	store_four_bytes(p->bank, packet, start_byte + 12);
 	store_four_bytes(p->bet, packet, start_byte + 16);
 	store_player_cards(p->cards, packet, start_byte + 20);
-
 }
 
 // Stores the dealer's card in the datagram
@@ -147,16 +146,6 @@ static void update_packet(struct black_jack *game, char *packet)
 		}
 	}
 }
-
-// Update the error datagram with the current status
-// static void update_error_packet(char *packet, int status_code)
-// {
-// 	if (status_code == NO_MONEY) {
-// 		packet[0] = 6;
-// 		packet[1] = 1;
-// 		// printf("YOU HAVE NO MORE MONEY TO PLAY WITH, YOU LOSE!\n");
-// 	}
-// }
 
 static int is_username_valid(char username[])
 {
@@ -229,8 +218,8 @@ static void send_packet(struct black_jack *game, char *state_packet)
 	update_packet(game, state_packet);
 	int socketfd = game->socketfd;
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		if (strncasecmp(game->players[i]->username, "",
-				USERNAME_LEN) != 0) {
+		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
+		    0) {
 			struct sockaddr_storage their_addr =
 			    game->players[i]->address;
 			socklen_t addr_len = game->players[i]->address_len;
@@ -247,7 +236,7 @@ static void send_packet(struct black_jack *game, char *state_packet)
 
 // Gets the username from the packet and stores in struct black_jack game
 static void add_player(struct black_jack *game, char packet[],
-		       struct sockaddr_storage addr, char * state_packet)
+		       struct sockaddr_storage addr, char *state_packet)
 {
 	int seat_count = 0;
 	// printf("packet: %s\n", packet);
@@ -293,6 +282,7 @@ static int find_next_player(struct black_jack *game, int current_player)
 	int next_player = 0;
 
 	for (; i < NUMBER_OF_PLAYERS; i++) {
+		printf("%s\n", "in for loop");
 		// printf("i + 1: %d\n", i + 1 );
 		if (i + 1 == NUMBER_OF_PLAYERS) {
 			// printf("reached the end of the table\n");
@@ -316,7 +306,7 @@ static int find_next_player(struct black_jack *game, int current_player)
 }
 
 // Gets the bet that the player has entered in the client.
-static void bet(struct black_jack *game, char packet[], char * state_packet)
+static void bet(struct black_jack *game, char packet[], char *state_packet)
 {
 	uint32_t bet_amount = 0;
 
@@ -359,7 +349,7 @@ static void bet(struct black_jack *game, char packet[], char * state_packet)
 	// printf("bet, active_player: %d\n", game->active_player);
 }
 
-static void hit(struct black_jack *game, char * state_packet)
+static void hit(struct black_jack *game, char *state_packet)
 {
 	char card;
 	int current_player = (game->active_player) - 1;
@@ -456,8 +446,8 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 		update_players(game);
 
 		// update_packet(game, state_packet);
-		// send_packet(game, state_packet);
-		// sleep(1);
+		send_packet(game, state_packet);
+		sleep(1);
 
 		// reset the player sequence.
 		game->active_player = 1;
@@ -611,7 +601,7 @@ void open_connection(int socketfd)
 	// This needs to terminate when control-c is pressed
 	while (1) {
 		struct timeval timeout = {
-		    .tv_sec = 3,
+		    .tv_sec = 5,
 		    .tv_usec = 0, // 100 ms
 		};
 
@@ -655,7 +645,21 @@ void open_connection(int socketfd)
 		} // End of if statement
 
 		if (bytes_ready == 0) {
-			// printf("timeout!\n");
+			printf("%s\n", "timed out");
+			memset(buf, '\0', 500);
+
+			bytes_read =
+			    recvfrom(socketfd, buf, 500, 0,
+				     (struct sockaddr *)&their_addr, &addr_len);
+
+			if (bytes_read == -1) {
+				fprintf(stderr, "%s\n",
+					"server: error reading from socket");
+				continue;
+			}
+			printf("timeout buf: ");
+			print_packet(buf);
+			send_error_packet(&game, their_addr, 5);
 		}
 
 	} // End of while loop
@@ -664,7 +668,7 @@ void open_connection(int socketfd)
 	close(socketfd);
 }
 
-int get_socket() // DON'T forget to close this
+int get_socket(char *port) // DON'T forget to close this
 {
 	struct addrinfo hints, *results, *cur;
 	int socketfd;
@@ -681,7 +685,14 @@ int get_socket() // DON'T forget to close this
 	// Get avaliable addresses
 	// THE PORT HERE NEEDS TO BE CHANGED TO DEFAULT_PORT or whatever the
 	// port is on the command line arg
-	int return_value = getaddrinfo(NULL, TEST_PORT, &hints, &results);
+	int return_value = -1;
+
+	if (port != NULL)
+		return_value = getaddrinfo(NULL, port, &hints, &results);
+	else {
+		return_value =
+		    getaddrinfo(NULL, DEFAULT_PORT, &hints, &results);
+	}
 
 	// Error check for getaddrinfo
 	if (return_value != 0) {

@@ -5,8 +5,8 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/socket.h>
 
 #define DEFAULT_PORT "4420"
@@ -57,7 +57,7 @@ struct black_jack {
 	struct player *players[7];
 };
 
-int get_socket();
+int get_socket(char *port);
 
 void open_connection(int socketfd);
 
