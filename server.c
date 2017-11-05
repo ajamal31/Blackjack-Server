@@ -250,8 +250,8 @@ static void send_error_packet(struct black_jack *game,
 		perror("sentto error");
 	}
 
-	printf("%s\n", "Username is currently being "
-		       "used in the game, try a different user name");
+	// printf("%s\n", "Username is currently being "
+		//        "used in the game, try a different user name");
 	// this might be wrong but you gootta free it right?
 	free(error_packet);
 }
@@ -403,8 +403,7 @@ static void update_players(struct black_jack *game)
 			p->bank += p->bet * 2.5;
 		} else if (p->hand_value > game->dealer_hand_value) {
 			p->bank += p->bet * 2;
-		}
-		else if (p->hand_value == game->dealer_hand_value) {
+		} else if (p->hand_value == game->dealer_hand_value) {
 			p->bank += p->bet;
 		}
 
@@ -420,7 +419,23 @@ static void update_players(struct black_jack *game)
 	}
 }
 
-static void stand(struct black_jack *game, char *packet)
+static void send_packets(struct black_jack *game, char *state_packet)
+{
+	int socketfd = game->socketfd;
+	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+		struct sockaddr_storage their_addr = game->players[i]->address;
+		socklen_t addr_len = game->players[i]->address_len;
+		int bytes_sent =
+		    sendto(socketfd, state_packet, STATE_SIZE, 0,
+			   (struct sockaddr *)&their_addr, addr_len);
+		if (bytes_sent == -1) {
+			// perror("bytes_sent");
+			continue;
+		}
+	}
+}
+
+static void stand(struct black_jack *game, char *packet, char *state_packet)
 {
 	int current_player = game->active_player - 1;
 	int next_player = find_next_player(game, current_player);
@@ -435,12 +450,27 @@ static void stand(struct black_jack *game, char *packet)
 		card = draw(game, DEALER);
 		game->dealer_hand_value += card_value(card);
 
+		// Send the packets after the dealer reveals the face down card
+		// and then wait 1 second
+		update_packet(game, state_packet);
+		send_packets(game, state_packet);
+		sleep(1);
+
+		// Dealer draws the cards and after drawing each card the dealer
+		// waits for 1 second then draws another card.
 		while (game->dealer_hand_value <= DEALER_TOTAL) {
 			card = draw(game, DEALER);
 			game->dealer_hand_value += card_value(card);
+			update_packet(game, state_packet);
+			send_packets(game, state_packet);
+			sleep(1);
 		}
 
+		// Count up all the winnings, losings, ties.. etc of the players
+		// and update their balances
 		update_players(game);
+		send_packets(game, state_packet);
+		sleep(1);
 
 		// reset the player sequence.
 		game->active_player = 1;
@@ -455,7 +485,7 @@ static void stand(struct black_jack *game, char *packet)
 // static void quit(struct black_jack *game, char *packet) {}
 
 static void handle_packet(struct black_jack *game, char packet[],
-			  struct sockaddr_storage addr)
+			  struct sockaddr_storage addr, char *state_packet)
 {
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
@@ -474,7 +504,7 @@ static void handle_packet(struct black_jack *game, char packet[],
 		bet(game, packet);
 	} else if (packet[0] == 3) {
 		printf("this is a stand request\n");
-		stand(game, packet);
+		stand(game, packet, state_packet);
 	} else if (packet[0] == 4) {
 		printf("this is a hit request\n");
 		hit(game);
@@ -618,23 +648,15 @@ void open_connection(int socketfd)
 				continue;
 			}
 
-			handle_packet(&game, buf, their_addr);
+			handle_packet(&game, buf, their_addr, state_packet);
 
 			update_packet(&game, state_packet);
 			printf("Struct after:\n");
 			print_game(game);
 			printf("\n");
 
-			for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-				their_addr = game.players[i]->address;
-				bytes_sent = sendto(
-				    socketfd, state_packet, STATE_SIZE, 0,
-				    (struct sockaddr *)&their_addr, addr_len);
-				if (bytes_sent == -1) {
-					// perror("bytes_sent");
-					continue;
-				}
-			}
+			send_packets(&game, state_packet);
+
 			printf("\n");
 
 		} // End of if statement
