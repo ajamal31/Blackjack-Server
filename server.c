@@ -298,8 +298,6 @@ static int find_next_player(struct black_jack *game, int current_player)
 			printf("player at %d\n", i + 1);
 			next_player = i + 1;
 			break;
-		} else {
-			// printf("not player at %d\n", i + 1);
 		}
 	}
 
@@ -405,6 +403,7 @@ static void update_players(struct black_jack *game)
 			game->players[i]->in_queue = false;
 		}
 	}
+	// game->active_player = find_next_player(game, game->active_player) +1;
 }
 
 static void stand(struct black_jack *game, char *packet, char *state_packet)
@@ -413,57 +412,78 @@ static void stand(struct black_jack *game, char *packet, char *state_packet)
 	int next_player = find_next_player(game, current_player);
 	char card;
 
+	printf("next_player in stand: %d\n", next_player);
+
 	// If the round isn't over
 	if (next_player != 0) {
-		game->active_player =
-		    find_next_player(game, current_player) + 1;
+		game->active_player = find_next_player(game, current_player) + 1;
+		send_packet(game, state_packet);
 		//     update_packet(game, state_packet);
-		//     send_packet(game, state_packet);
-	} else {
+		// printf("state in stand during round:\n");
+		// print_game(*game);
+		// printf("\n");
+		// send_packet(game, state_packet);
+	// no more players so round's over
+	} else if (next_player == 0) {
+
+		game->active_player = 0;
 		// The dealer reveals the "facedown" card.
+		sleep(1);
 		card = draw(game, DEALER);
 		game->dealer_hand_value += card_value(card);
-
-		// Send the packets after the dealer reveals the face down card
-		// and then wait 1 second
-		// update_packet(game, state_packet);
-
-		// sleep(1);
+		send_packet(game, state_packet);
+		sleep(1);
+		// game->active_player =0 ;
+		//
+		// // Send the packets after the dealer reveals the face down card
+		// // and then wait 1 second
+		// // update_packet(game, state_packet);
+		//
+		// // sleep(1);
 		// send_packet(game, state_packet);
-		// sleep(1);
-
-		// Dealer draws the cards and after drawing each card the dealer
-		// waits for 1 second then draws another card.
+		// // sleep(1);
+		//
+		// // Dealer draws the cards and after drawing each card the dealer
+		// // waits for 1 second then draws another card.
 		while (game->dealer_hand_value <= DEALER_TOTAL) {
+			// printf("dealer's hand value: %d\n", game->dealer_hand_value );
 			card = draw(game, DEALER);
 			game->dealer_hand_value += card_value(card);
+			send_packet(game, state_packet);
+			sleep(1);
 			// update_packet(game, state_packet);
 			// send_packet(game, state_packet);
 			// sleep(1);
 		}
 
-		// Count up all the winnings, losings, ties.. etc of the players
-		// and update their balances
+		sleep(1);
+		//
+		// // Count up all the winnings, losings, ties.. etc of the players
+		// // and update their balances
 		update_players(game);
 
-		// update_packet(game, state_packet);
 		send_packet(game, state_packet);
-		sleep(1);
 
-		// reset the player sequence.
-		game->active_player = 1;
+		game->active_player = find_next_player(game, -1) + 1;
+		printf("active player in stand: %d\n", game->active_player );
 		game->dealer_hand_value = 0;
 		memset(game->dealer_cards, 0, MAX_CARDS);
-		// send_packet(game, state_packet);
+		send_packet(game, state_packet);
 
-		// sleep(1);
-
+		// // reset the player sequence.
+		// // game->active_player = 1;
+		// game->dealer_hand_value = 0;
+		// memset(game->dealer_cards, 0, MAX_CARDS);
+		// // send_packet(game, state_packet);
+		//
+		sleep(1);
+		//
 		card = draw(game, DEALER);
 		game->dealer_hand_value += card_value(card);
 		// update_packet(game, state_packet);
-		// send_packet(game, state_packet);
+		send_packet(game, state_packet);
 	}
-	send_packet(game, state_packet);
+	// send_packet(game, state_packet);
 }
 
 static void quit(struct black_jack *game, struct sockaddr_storage addr,
@@ -475,7 +495,7 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr,
 	unsigned char *ip = (unsigned char *)&sin->sin_addr.s_addr;
 	unsigned short sin_port = sin->sin_port;
 	printf("sin_port %d\n", sin_port);
-	int current_player = game->active_player -1;
+	int current_player = game->active_player - 1;
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		struct sockaddr_in *sin2 =
@@ -502,7 +522,7 @@ static void quit(struct black_jack *game, struct sockaddr_storage addr,
 		}
 	}
 
-	game->active_player = find_next_player(game, current_player) +1;
+	game->active_player = find_next_player(game, current_player) + 1;
 
 	send_packet(game, packet);
 
@@ -536,7 +556,7 @@ static void handle_packet(struct black_jack *game, char packet[],
 		hit(game, state_packet);
 	} else if (packet[0] == 5) {
 		printf("this is a quit request\n");
-		quit(game, addr, state_packet);
+		// quit(game, addr, state_packet);
 		// printf("quit packet: ");
 		// print_packet(packet);
 	} else if (packet[0] == 6) {
