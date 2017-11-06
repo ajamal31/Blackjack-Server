@@ -31,7 +31,7 @@ static void mem_check(void *mem)
 // Store the 4B (1B each) char datatypes into a 4B unsigned int
 static void store_four_bytes(uint32_t data, char *packet, int index)
 {
-	// Store the bytes (see if you can understand why this is working)
+	// Store the bytes
 	packet[index] = (data >> 24) | packet[index];
 	packet[index + 1] = (data >> 16) | packet[index + 1];
 	packet[index + 2] = (data >> 8) | packet[index + 2];
@@ -41,7 +41,7 @@ static void store_four_bytes(uint32_t data, char *packet, int index)
 // Store the 2B (1B each) char datatypes into a 2B unsigned int
 static void store_two_bytes(uint16_t data, char *packet, int index)
 {
-	// Store the bytes (see if you can understand why this is working)
+	// Store the bytes
 	packet[index] = (data >> 8) | packet[index];
 	packet[index + 1] = data | packet[index + 1];
 }
@@ -57,8 +57,6 @@ static void store_player_cards(char *cards, char *packet, int index)
 }
 
 // Stores the player's information in the datagram.
-// This isn't complete, refactor this and also you're only for the first 2ß
-// players
 static void store_player(struct Player *p, char *packet, int index)
 {
 	// 1 because I stored the the whole connect request in the struct so
@@ -367,17 +365,13 @@ static int find_next_player(struct BlackJack *game, int current_player)
 	int i = current_player;
 	int next_player = 0;
 
-	if (i != -1)
-		printf("p->username(active player): %s\n", p->username);
 
 	for (; i < NUMBER_OF_PLAYERS - 1; i++) {
 		// Store the next player
 		p = game->players[i + 1];
-		printf("p->username(next player): %s\n", p->username);
 
 		if (strncasecmp(p->username, "", USERNAME_LEN != 0) &&
 		    p->in_queue == false) {
-			printf("player next player: %s \n", p->username);
 			next_player = i + 1;
 			return next_player;
 		}
@@ -422,12 +416,14 @@ static void bet(struct BlackJack *game, char packet[], char *state_packet)
 
 	int current_player = game->active_player - 1;
 	uint32_t current_bank = game->players[current_player]->bank;
+	int min_bet = game->min_bet;
 
 	// If the player has enough money in the bank account place their bet
 	// and give them 2 cards
 	int next_player = find_next_player(game, current_player);
 
-	if (current_bank >= bet_amount && next_player <= 7) {
+	if (current_bank >= bet_amount && bet_amount >= min_bet &&
+	    next_player <= 7) {
 		game->players[current_player]->bet = bet_amount;
 		game->players[current_player]->bank -= bet_amount;
 		if (next_player == 7) {
@@ -466,10 +462,10 @@ static void hit(struct BlackJack *game, char *state_packet)
 	// The player is out of money, they're done
 	if (p->bank == 0) {
 		send_error_packet(game, p->address, NO_MONEY);
-		// NEED TO ADD THE PLAYER TO THE HISTORY HERE
+		struct History *history = history = create_node(p);
+		add_history(game, history);
 		memset(p, 0, sizeof(struct Player));
 	} else {
-		// update_packet(game, state_packet);
 		send_packet(game, state_packet);
 	}
 }
@@ -572,6 +568,8 @@ static void queue_to_game(struct BlackJack *game)
 static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 		 char *packet)
 {
+	// I didn't know how to get the address and port from the
+	// sockaddr_storage so I used the following links
 	// https://stackoverflow.com/questions/12810587/extracting-ip-address-and-port-info-from-sockaddr-storage
 	// https://msdn.microsoft.com/en-us/library/zx63b042.aspx
 	struct sockaddr_in *sin = (struct sockaddr_in *)&addr;
@@ -590,7 +588,6 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 			struct History *history = history =
 			    create_node(game->players[i]);
 			add_history(game, history);
-			// print_history(game);
 			memset(game->players[i]->username, 0, USERNAME_LEN);
 			memset(game->players[i], 0, sizeof(struct Player));
 			int next_player = find_next_player(game, i);
