@@ -68,7 +68,7 @@ struct History {
 
 int get_socket(char *port);
 
-void open_connection(int socketfd);
+void open_connection(int socketfd, char * deck_size, char * money, char * min_bet);
 
 void print_game(struct BlackJack);
 

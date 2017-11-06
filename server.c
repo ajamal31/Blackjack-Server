@@ -28,22 +28,7 @@ static void mem_check(void *mem)
 	}
 }
 
-static void print_packet(char *packet)
-{
-	for (int i = 0; i < 320; i++) {
-		if (packet[i] == 0) {
-			printf("%c", '0');
-		} else if (packet[i] == 1) {
-			printf("%c", '1');
-		} else {
-			printf("%c", packet[i]);
-		}
-	}
-	printf("\n");
-}
-
-// you might not be storing this correctly because you need to consider the
-// different data types like unsigned int and char and stuff
+// Store the 4B (1B each) char datatypes into a 4B unsigned int
 static void store_four_bytes(uint32_t data, char *packet, int index)
 {
 	// Store the bytes (see if you can understand why this is working)
@@ -53,14 +38,12 @@ static void store_four_bytes(uint32_t data, char *packet, int index)
 	packet[index + 3] = data | packet[index + 3];
 }
 
-// same thing here as above
+// Store the 2B (1B each) char datatypes into a 2B unsigned int
 static void store_two_bytes(uint16_t data, char *packet, int index)
 {
 	// Store the bytes (see if you can understand why this is working)
 	packet[index] = (data >> 8) | packet[index];
 	packet[index + 1] = data | packet[index + 1];
-	// packet[index + 2] = (data >> 8) | packet[index + 2];
-	// packet[index + 3] = data | packet[index + 3];
 }
 
 // Stores the player's cards/hand in the datagram.
@@ -111,18 +94,12 @@ static void store_dealer_cards(char *dealer_cards, char *packet)
 }
 
 // Initializes the datagram (all 0s)
-static char *make_packet(char *type)
+static char *make_packet()
 {
 	char *packet = malloc(STATE_SIZE);
 	mem_check(packet);
 	memset(packet, 0, STATE_SIZE);
 	return packet;
-	// if (strncasecmp(type, "state", STATE_SIZE) == 0) {
-	// 	packet = malloc(STATE_SIZE);
-	// 	mem_check(packet);
-	// 	memset(packet, 0, STATE_SIZE);
-	// 	return packet;
-	// }
 }
 
 // This function updates the datagram with the current state of the game into
@@ -289,33 +266,6 @@ static void add_history(struct BlackJack *game, struct History *history)
 	cur->next = history;
 }
 
-static int is_broke(struct BlackJack *game, char *username)
-{
-	struct History *cur = game->history;
-
-	printf("%s\n", "history in is_broke:");
-	print_history(game);
-	printf("\n");
-	printf("username: %s\n", username);
-	if (cur != NULL &&
-	    strncasecmp(cur->player->username, username, USERNAME_LEN) == 0) {
-		if (cur->player->bank <= 0) {
-			return 0;
-		} else
-			printf("cur->player->username: %s\n",
-			       cur->player->username);
-		printf("%s is in the history\n", cur->player->username);
-	}
-
-	while (cur->next != NULL) {
-		if (strncasecmp(cur->player->username, username,
-				USERNAME_LEN) == 0) {
-		}
-	}
-
-	return 0;
-}
-
 // THIS FUNCTION IS NOT DONE because you're all checking if the first player is
 // the first player that you're looking for
 struct History *find_player_history(struct BlackJack *game, char *username)
@@ -334,23 +284,34 @@ struct History *find_player_history(struct BlackJack *game, char *username)
 		       history->player->bank);
 		return history;
 	}
+	while (history->next != NULL &&
+	       strncasecmp(history->player->username, username, USERNAME_LEN) !=
+		   0) {
+		history = history->next;
+	}
 
-	return NULL;
+	return history;
 }
 
 // Gets the username from the packet and stores in struct BlackJack game
 // THIS ISN't DONE EITHER
 static void add_player(struct BlackJack *game, char packet[],
-		       struct sockaddr_storage addr, char *state_packet)
+		       struct sockaddr_storage addr, char *state_packet,
+		       char *money)
 {
 	int seat_count = 0;
 	char *username;
+	int bank_amount;
+	if (money != NULL) {
+		bank_amount = atoi(money);
+	} else {
+		bank_amount = DEFAULT_BANK;
+	}
 
-	printf("%s's history\n", packet);
 	struct History *history = find_player_history(game, packet);
+
 	if (history != NULL && (history->player->bank == 0)) {
 		send_error_packet(game, addr, NO_MONEY);
-		printf("%s history: %d\n", packet, history->player->bank);
 		return;
 	}
 
@@ -373,7 +334,7 @@ static void add_player(struct BlackJack *game, char packet[],
 			// Add the player's bank
 
 			if (history == NULL) {
-				game->players[i]->bank = DEFAULT_BANK;
+				game->players[i]->bank = bank_amount;
 			} else {
 				game->players[i]->bank = history->player->bank;
 			}
@@ -410,7 +371,6 @@ static int find_next_player(struct BlackJack *game, int current_player)
 		printf("p->username(active player): %s\n", p->username);
 
 	for (; i < NUMBER_OF_PLAYERS - 1; i++) {
-
 		// Store the next player
 		p = game->players[i + 1];
 		printf("p->username(next player): %s\n", p->username);
@@ -463,13 +423,10 @@ static void bet(struct BlackJack *game, char packet[], char *state_packet)
 	int current_player = game->active_player - 1;
 	uint32_t current_bank = game->players[current_player]->bank;
 
-	// printf("current_bet: %d, current_bank: %d\n", bet_amount,
-	// current_bank);
-
 	// If the player has enough money in the bank account place their bet
 	// and give them 2 cards
 	int next_player = find_next_player(game, current_player);
-	printf("next_player in bet function: %d\n", next_player);
+
 	if (current_bank >= bet_amount && next_player <= 7) {
 		game->players[current_player]->bet = bet_amount;
 		game->players[current_player]->bank -= bet_amount;
@@ -484,8 +441,6 @@ static void bet(struct BlackJack *game, char packet[], char *state_packet)
 			game->active_player =
 			    find_next_player(game, current_player) + 1;
 		}
-		printf("active_player in bet request: %d\n",
-		       game->active_player);
 	}
 
 	send_packet(game, state_packet);
@@ -499,8 +454,6 @@ static void hit(struct BlackJack *game, char *state_packet)
 
 	card = draw(game, current_player);
 	p->hand_value += card_value(card);
-
-	printf("players: %d's hand_value: %d\n", current_player, p->hand_value);
 
 	// The player lost that round so take the money out of the player's bank
 	// and reset their player
@@ -526,8 +479,6 @@ static void update_players(struct BlackJack *game)
 	// Set all the current players' queue status to false
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		struct Player *p = game->players[i];
-		// printf("p->hand_value:%d, game->dealer_hand_value: %d\n",
-		//        p->hand_value, game->dealer_hand_value);
 
 		if (p->hand_value == BLACKJACK_VALUE) {
 			p->bank += p->bet * 2.5;
@@ -564,9 +515,6 @@ static void stand(struct BlackJack *game, char *packet, char *state_packet)
 	int next_player = find_next_player(game, current_player);
 	char card;
 
-	printf("current_player in stand: %d\n", current_player);
-	printf("next_player in stand: %d\n", next_player);
-
 	// If the round isn't over
 	if (next_player < 7) {
 		game->active_player = next_player + 1;
@@ -574,7 +522,6 @@ static void stand(struct BlackJack *game, char *packet, char *state_packet)
 
 		// no more players so round's over
 	} else {
-		printf("entered round over state!\n");
 
 		game->active_player = 0;
 		// The dealer reveals the "facedown" card.
@@ -630,7 +577,6 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 	struct sockaddr_in *sin = (struct sockaddr_in *)&addr;
 	unsigned char *ip = (unsigned char *)&sin->sin_addr.s_addr;
 	unsigned short sin_port = sin->sin_port;
-	printf("sin_port %d\n", sin_port);
 	int current_player = game->active_player - 1;
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
@@ -648,68 +594,38 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 			memset(game->players[i]->username, 0, USERNAME_LEN);
 			memset(game->players[i], 0, sizeof(struct Player));
 			int next_player = find_next_player(game, i);
-			printf("next player avaliable: %d\n", next_player);
 			if (next_player == 7) {
 				queue_to_game(game);
 				next_player = find_next_player(game, -1);
-				printf("next player avaliable: %d\n",
-				       next_player);
 			}
 		}
 	}
 
-	printf("History in quit request: \n");
 	print_history(game);
-
-	//
-	// for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-	// 	if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
-	// 	    0) {
-	// 		game->players[i]->in_queue = false;
-	// 	}
-	// }
-
-	// THIS IS PROBABLY NOT RIGHT SO YOU'LL NEED A DIFFERENT SOLUTION.
 	game->active_player = find_next_player(game, current_player) + 1;
 
 	send_packet(game, packet);
 }
 
 static void handle_packet(struct BlackJack *game, char packet[],
-			  struct sockaddr_storage addr, char *state_packet)
+			  struct sockaddr_storage addr, char *state_packet,
+			  char *money)
 {
 	// Everytime a packet is received, this needs to be updated.
 	game->seq_num += 1;
 
 	if (packet[0] == 1) {
-		// printf("%s\n", "this is a connect request");
 		if (is_username_valid(packet) == 0) {
-			add_player(game, packet, addr, state_packet);
-		} else {
-			printf("%s\n", "Invalid username; can only contain "
-				       "letters or digits and can't be longer "
-				       "than 12 characters");
+			add_player(game, packet, addr, state_packet, money);
 		}
 	} else if (packet[0] == 2) {
-		printf("this is a bet request\n");
 		bet(game, packet, state_packet);
 	} else if (packet[0] == 3) {
-		printf("this is a stand request\n");
 		stand(game, packet, state_packet);
 	} else if (packet[0] == 4) {
-		printf("this is a hit request\n");
 		hit(game, state_packet);
 	} else if (packet[0] == 5) {
-		printf("this is a quit request\n");
 		quit(game, addr, state_packet);
-	} else if (packet[0] == 6) {
-		printf("this is an error request\n");
-	} else if (packet[0] == 7) {
-		printf("this is a message request\n");
-	} else if (packet[0] == 8) {
-		printf("this is an ack request\n");
-	} else {
-		printf("this is not a valid request\n");
 	}
 }
 
@@ -723,8 +639,6 @@ void print_game(struct BlackJack game)
 	printf("dealer_cards: %s\n", game.dealer_cards);
 	printf("dealer_hand_value: %d\n", game.dealer_hand_value);
 	printf("round_status: %d\n", game.round_status);
-	// printf("cards: ");
-	// print_deck(game.cards);
 	printf("\n");
 
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
@@ -737,20 +651,32 @@ void print_game(struct BlackJack game)
 }
 
 // Make sure you write a free function for this
-static void init_game(struct BlackJack *game, int socketfd)
+static void init_game(struct BlackJack *game, int socketfd, char *deck_size,
+		      char *money, char *min_bet)
 {
+	int min_bet_amount = MIN_BET;
+	if (min_bet != NULL) {
+		min_bet_amount = atoi(min_bet);
+	}
+
 	game->socketfd = socketfd;
 	game->op_code = 0;
 	game->response_arg = 0;
 	game->seq_num = 0;
-	game->min_bet = MIN_BET;
+	game->min_bet = min_bet_amount;
 	game->active_player = 0;
 	game->round_status = NEW_ROUND;
 	memset(game->dealer_cards, 0, MAX_CARDS);
 	game->dealer_hand_value = 0;
 	game->history = NULL;
 
-	char *deck = make_deck(DEFAULT_NUM_OF_DECKS);
+	char *deck = NULL;
+
+	if (deck_size == NULL) {
+		deck = make_deck(DEFAULT_NUM_OF_DECKS);
+	} else {
+		deck = make_deck(atoi(deck_size));
+	}
 	game->cards = deck;
 
 	// store the first card because on launch a card has to be there?
@@ -775,7 +701,7 @@ static void init_game(struct BlackJack *game, int socketfd)
 
 // static void clear_game(struct black *game) {}
 
-void open_connection(int socketfd)
+void open_connection(int socketfd, char *deck_size, char *money, char *min_bet)
 {
 	// Declare main_readfds as fd_set
 	fd_set main_readfds;
@@ -795,21 +721,22 @@ void open_connection(int socketfd)
 	int bytes_read, bytes_ready;
 
 	// Initialize the game board
-	init_game(&game, socketfd);
+	init_game(&game, socketfd, deck_size, money, min_bet);
 
-	state_packet = make_packet("state");
+	state_packet = make_packet();
 
 	// passed this at the same time with the state_packet and it didn't work
 	// error_packet = make_packet("error");
 
-	printf("Struct before:\n");
+	printf("STATE\n");
 	print_game(game);
 	printf("\n");
 
 	// This needs to terminate when control-c is pressed
+	// struct timeval timout;
 	while (1) {
 		struct timeval timeout = {
-		    .tv_sec = 5,
+		    .tv_sec = 1,
 		    .tv_usec = 0, // 100 ms
 		};
 
@@ -839,35 +766,20 @@ void open_connection(int socketfd)
 				continue;
 			}
 
-			handle_packet(&game, buf, their_addr, state_packet);
+			handle_packet(&game, buf, their_addr, state_packet,
+				      money);
 
-			// update_packet(&game, state_packet);
-			printf("Struct after:\n");
+			printf("STATE:\n");
 			print_game(game);
 			printf("\n");
-
-			// send_packet(&game, state_packet);
 
 			printf("\n");
 
 		} // End of if statement
 
 		if (bytes_ready == 0) {
-			// printf("%s\n", "timed out");
-			// memset(buf, '\0', 500);
-			//
-			// bytes_read =
-			//     recvfrom(socketfd, buf, 500, 0,
-			// 	     (struct sockaddr *)&their_addr, &addr_len);
-			//
-			// if (bytes_read == -1) {
-			// 	fprintf(stderr, "%s\n",
-			// 		"server: error reading from socket");
-			// 	continue;
-			// }
-			// printf("timeout buf: ");
-			// print_packet(buf);
-			// send_error_packet(&game, their_addr, 5);
+			// I think this was where the timeout was suppose to
+			// happen but I didn't get to implement that feature.
 		}
 
 	} // End of while loop
