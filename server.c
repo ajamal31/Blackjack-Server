@@ -554,13 +554,13 @@ static void stand(struct BlackJack *game, char *packet, char *state_packet)
 	printf("next_player in stand: %d\n", next_player);
 
 	// If the round isn't over
-	if (next_player != 0) {
+	if (next_player != current_player) {
 		game->active_player =
 		    find_next_player(game, current_player) + 1;
 		send_packet(game, state_packet);
 
 		// no more players so round's over
-	} else if (next_player == 0) {
+	} else if (next_player == current_player) {
 
 		game->active_player = 0;
 		// The dealer reveals the "facedown" card.
@@ -641,15 +641,15 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 	print_history(game);
 
 	//
-	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
-		if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
-		    0) {
-			game->players[i]->in_queue = false;
-		}
-	}
+	// for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
+	// 	if (strncasecmp(game->players[i]->username, "", USERNAME_LEN) !=
+	// 	    0) {
+	// 		game->players[i]->in_queue = false;
+	// 	}
+	// }
 
 	// THIS IS PROBABLY NOT RIGHT SO YOU'LL NEED A DIFFERENT SOLUTION.
-	game->active_player = 0;
+	game->active_player = find_next_player(game, current_player) + 1;
 
 	send_packet(game, packet);
 
