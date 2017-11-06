@@ -401,18 +401,20 @@ static int find_next_player(struct BlackJack *game, int current_player,
 	int i = current_player;
 	int next_player = 0;
 	int count = 1;
-	printf("p->username(the player who made the bet): %s\n", p->username);
+
+	if ( i != -1)
+		printf("p->username(active player): %s\n", p->username);
 
 	for (; i < NUMBER_OF_PLAYERS - 1; i++) {
 
 		// Store the next player
 		p = game->players[i + 1];
-		printf("p->username: %s\n", p->username);
+		printf("p->username(next player): %s\n", p->username);
 
 		if (strncasecmp(p->username, "", USERNAME_LEN != 0) &&
 		    p->in_queue == false) {
-			printf("player %s can bet\n", p->username);
-			next_player = i + 1;
+			printf("player next player: %s \n", p->username);
+			next_player= i + 1;
 			return next_player;
 			// break;
 		}
@@ -487,14 +489,17 @@ static void bet(struct BlackJack *game, char packet[], char *state_packet)
 			// draw the cards here.
 			game->active_player =
 			    find_next_player(game, -1, BET) + 1;
+		} else {
+			game->active_player =
+			    find_next_player(game, current_player, BET) + 1;
 		}
 		printf("active_player in bet request: %d\n",
 		       game->active_player);
 	}
 	// Everyone has placed their bets so loop back to first player
-	else {
-		game->active_player = find_next_player(game, -1, BET) + 1;
-	}
+	// else {
+	// 	game->active_player = find_next_player(game, -1, BET) + 1;
+	// }
 
 	send_packet(game, state_packet);
 }
