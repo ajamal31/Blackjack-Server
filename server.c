@@ -237,8 +237,14 @@ static void send_packet(struct BlackJack *game, char *state_packet)
 static struct History *create_node(struct Player *player)
 {
 	struct History *history = malloc(sizeof(struct History));
+	mem_check(history);
 	memset(history, 0, sizeof(struct History));
-	history->player = player;
+
+	history->player = malloc(sizeof(struct Player));
+	mem_check(history->player);
+	strncpy(history->player->username, player->username, USERNAME_LEN);
+	history->player->bank = player->bank;
+
 	history->next = NULL;
 
 	printf("history->player.username: %s\n", history->player->username);
@@ -250,7 +256,8 @@ static void print_history(struct BlackJack *game)
 	printf("History: \n");
 	struct History *cur = game->history;
 	while (cur != NULL) {
-		printf("player: %s, bank: %d\n", cur->player->username, cur->player->bank);
+		printf("player: %s, bank: %d\n", cur->player->username,
+		       cur->player->bank);
 		cur = cur->next;
 	}
 }
@@ -264,10 +271,75 @@ static void add_history(struct BlackJack *game, struct History *history)
 		return;
 	}
 
+	// Update if the first node is the user
+	if (strncasecmp(cur->player->username, history->player->username,
+			USERNAME_LEN) == 0) {
+		cur->player->bank = history->player->bank;
+		free(history->player);
+		free(history);
+		return;
+	}
+
+	// Find the next avaliable node to add to or update the exisiting user
 	while (cur->next != NULL) {
+		if (strncasecmp(cur->player->username,
+				history->player->username, USERNAME_LEN) == 0) {
+			cur->player->bank = history->player->bank;
+			free(history->player);
+			free(history);
+			return;
+		}
 		cur = cur->next;
 	}
 	cur->next = history;
+}
+
+static int is_broke(struct BlackJack *game, char *username)
+{
+	struct History *cur = game->history;
+
+	printf("%s\n", "history in is_broke:");
+	print_history(game);
+	printf("\n");
+	printf("username: %s\n", username);
+	if (cur != NULL &&
+	    strncasecmp(cur->player->username, username, USERNAME_LEN) == 0) {
+		if (cur->player->bank <= 0) {
+			return 0;
+		} else
+			printf("cur->player->username: %s\n",
+			       cur->player->username);
+		printf("%s is in the history\n", cur->player->username);
+	}
+
+	while (cur->next != NULL) {
+		if (strncasecmp(cur->player->username, username,
+				USERNAME_LEN) == 0) {
+		}
+	}
+
+	return 0;
+}
+
+struct History *find_player_history(struct BlackJack *game, char *username)
+{
+
+	struct History *history = game->history;
+
+	// If there isn't a history of the players, it means that the linked
+	// list is empty;
+	if (history == NULL) {
+		return NULL;
+	}
+
+	if (strncasecmp(history->player->username, username, USERNAME_LEN) ==
+	    0) {
+		printf("history found for: %s, bank %d\n", username,
+		       history->player->bank);
+		return history;
+	}
+
+	return NULL;
 }
 
 // Gets the username from the packet and stores in struct BlackJack game
@@ -277,17 +349,30 @@ static void add_player(struct BlackJack *game, char packet[],
 	int seat_count = 0;
 	// printf("packet: %s\n", packet);
 	char *username;
+	// is_broke(game, packet);
+	printf("%s's history\n", packet);
+	struct History *h = find_player_history(game, packet);
+	if (h != NULL && (h->player->bank == 0)) {
+		send_error_packet(game, addr, NO_MONEY);
+		printf("%s history: %d\n", packet, h->player->bank);
+		return;
+	}
 
 	// Find an empty seat and add the player to it.
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		seat_count++;
 		username = game->players[i]->username;
+
+		// If the username already exists on the table, send an error
+		// datagram stating that the username is taken.
 		if (strncasecmp(username, packet, USERNAME_LEN) == 0) {
 			send_error_packet(game, addr, USERNAME_TAKEN);
 			break;
 		}
-		// Add the player to the seat if there's an empty seat and add
-		// them to the history linked list
+
+		// is_broke(game, packet);
+
+		// Add the player to the seat if there's an empty seat
 		if (strncasecmp(username, "", USERNAME_LEN) == 0) {
 			// Add the player's username
 			strncpy(username, packet, USERNAME_LEN);
@@ -301,10 +386,6 @@ static void add_player(struct BlackJack *game, char packet[],
 			} else {
 				game->players[i]->in_queue = true;
 			}
-
-			struct History *history = create_node(game->players[i]);
-			add_history(game, history);
-			print_history(game);
 
 			// update_packet(game, state_packet);
 			send_packet(game, state_packet);
@@ -324,9 +405,15 @@ static int find_next_player(struct BlackJack *game, int current_player)
 	// current_player += 1;
 	int i = current_player;
 	int next_player = 0;
+	int count = 0;
 
 	for (; i < NUMBER_OF_PLAYERS; i++) {
-		printf("%s\n", "in for loop");
+
+		if (count == NUMBER_OF_PLAYERS) {
+			break;
+		}
+		count++;
+		// printf("%s\n", "in for loop");
 		// printf("i + 1: %d\n", i + 1 );
 		if (i + 1 == NUMBER_OF_PLAYERS) {
 			// printf("reached the end of the table\n");
@@ -425,8 +512,8 @@ static void update_players(struct BlackJack *game)
 	// Set all the current players' queue status to false
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
 		struct Player *p = game->players[i];
-		printf("p->hand_value: %d, game->dealer_hand_value: %d\n",
-		       p->hand_value, game->dealer_hand_value);
+		// printf("p->hand_value:%d, game->dealer_hand_value: %d\n",
+		//        p->hand_value, game->dealer_hand_value);
 
 		if (p->hand_value == BLACKJACK_VALUE) {
 			p->bank += p->bet * 2.5;
@@ -440,6 +527,15 @@ static void update_players(struct BlackJack *game)
 		p->hand_value = 0;
 		memset(p->cards, 0, MAX_CARDS);
 		p->bet = 0;
+
+		if (strncasecmp(p->username, "", USERNAME_LEN) != 0 &&
+		    p->bank == 0) {
+			send_error_packet(game, p->address, NO_MONEY);
+			struct History *history = history = create_node(p);
+			add_history(game, history);
+			memset(p->username, 0, USERNAME_LEN);
+			memset(p, 0, sizeof(struct Player));
+		}
 
 		char *username = game->players[i]->username;
 		if (strncasecmp(username, "", USERNAME_LEN) != 0) {
@@ -495,7 +591,7 @@ static void stand(struct BlackJack *game, char *packet, char *state_packet)
 		send_packet(game, state_packet);
 
 		game->active_player = find_next_player(game, -1) + 1;
-		printf("active player in stand: %d\n", game->active_player);
+		// printf("active player in stand: %d\n", game->active_player);
 		game->dealer_hand_value = 0;
 		memset(game->dealer_cards, 0, MAX_CARDS);
 		send_packet(game, state_packet);
@@ -528,6 +624,10 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 
 		if (ip[0] == ip2[0] && ip[0] == ip2[0] && ip[0] == ip2[0] &&
 		    ip[0] == ip2[0] && sin_port == sin_port2) {
+			struct History *history = history =
+			    create_node(game->players[i]);
+			add_history(game, history);
+			// print_history(game);
 			memset(game->players[i], 0, sizeof(struct Player));
 			// current_player = game->active_player;
 			// game->active_player = find_next_player(game, i);
@@ -536,6 +636,9 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 			//        game->players[i]->username);
 		}
 	}
+
+	printf("History in quit request: \n");
+	print_history(game);
 
 	//
 	for (int i = 0; i < NUMBER_OF_PLAYERS; i++) {
