@@ -393,18 +393,28 @@ static void add_player(struct BlackJack *game, char packet[],
 	}
 }
 
-static int find_next_player(struct BlackJack *game, int current_player)
+static int find_next_player(struct BlackJack *game, int current_player,
+			    int type)
 {
 	struct Player *p;
 	// current_player += 1;
 	int i = current_player;
 	int next_player = 0;
-	int count = 0;
+	int count = 1;
 
 	for (; i < NUMBER_OF_PLAYERS; i++) {
 
+		// We've went through every player now it's time for the dealer
+		// to be active
+		printf("count: %d\n", count);
 		if (count == NUMBER_OF_PLAYERS) {
-			break;
+			if (type == BET) {
+				next_player = 0;
+				break;
+			} else {
+				next_player = -1;
+				break;
+			}
 		}
 		count++;
 
@@ -458,7 +468,9 @@ static void bet(struct BlackJack *game, char packet[], char *state_packet)
 		card = draw(game, current_player);
 		game->players[current_player]->hand_value += card_value(card);
 		game->active_player =
-		    find_next_player(game, current_player) + 1;
+		    find_next_player(game, current_player, BET) + 1;
+		printf("active_player in bet request: %d\n",
+		       game->active_player);
 	} else {
 		printf("you don't have enough money to bet\n");
 	}
@@ -482,7 +494,7 @@ static void hit(struct BlackJack *game, char *state_packet)
 	if (p->hand_value > 21) {
 		p->bet = 0;
 		game->active_player =
-		    find_next_player(game, current_player) + 1;
+		    find_next_player(game, current_player, HIT) + 1;
 	}
 
 	// The player is out of money, they're done
@@ -536,19 +548,21 @@ static void update_players(struct BlackJack *game)
 static void stand(struct BlackJack *game, char *packet, char *state_packet)
 {
 	int current_player = game->active_player - 1;
-	int next_player = find_next_player(game, current_player);
+	int next_player = find_next_player(game, current_player, STAND);
 	char card;
 
+	printf("current_player in stand: %d\n", current_player);
 	printf("next_player in stand: %d\n", next_player);
 
 	// If the round isn't over
-	if (next_player != current_player) {
+	if (next_player != -1) {
 		game->active_player =
-		    find_next_player(game, current_player) + 1;
+		    find_next_player(game, current_player, STAND) + 1;
 		send_packet(game, state_packet);
 
 		// no more players so round's over
-	} else if (next_player == current_player) {
+	} else {
+		printf("entered round over state!\n");
 
 		game->active_player = 0;
 		// The dealer reveals the "facedown" card.
@@ -575,7 +589,7 @@ static void stand(struct BlackJack *game, char *packet, char *state_packet)
 
 		send_packet(game, state_packet);
 
-		game->active_player = find_next_player(game, -1) + 1;
+		game->active_player = find_next_player(game, -1, BET) + 1;
 		game->dealer_hand_value = 0;
 		memset(game->dealer_cards, 0, MAX_CARDS);
 		send_packet(game, state_packet);
@@ -630,10 +644,9 @@ static void quit(struct BlackJack *game, struct sockaddr_storage addr,
 	// }
 
 	// THIS IS PROBABLY NOT RIGHT SO YOU'LL NEED A DIFFERENT SOLUTION.
-	game->active_player = find_next_player(game, current_player) + 1;
+	game->active_player = find_next_player(game, current_player, BET) + 1;
 
 	send_packet(game, packet);
-
 }
 
 static void handle_packet(struct BlackJack *game, char packet[],

@@ -27,6 +27,9 @@
 #define BLACKJACK_VALUE 21
 #define NEW_ROUND 0
 #define BETS_PLACED true
+#define BET 2
+#define STAND 3
+#define HIT 4
 
 #define NO_MONEY 1
 #define NO_ROOM 2
