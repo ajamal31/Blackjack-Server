@@ -1,7 +1,4 @@
-/* Name: Arun
- * Course: CMPT 361 (FALL 2017)
- * Assign: 2
- */
+/* Main Program */
 
 #include "server.h"
 #include <stdio.h>
