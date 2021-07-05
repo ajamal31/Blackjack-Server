@@ -1,7 +1,3 @@
-# Name: Arun Jamal
-# Course: CMPT 361 (Fall 2017)
-# Description: Builds the program
-
 CC=gcc
 CFLAGS=-Wall -std=c99 -pedantic -D_POSIX_C_SOURCE=200809L -g
 
